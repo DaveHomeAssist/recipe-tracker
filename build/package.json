@@ -1,0 +1,15 @@
+{
+  "name": "recipe-tracker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A shared family recipe journal — static site + serverless helpers.",
+  "scripts": {
+    "parse-bookmarks": "node scripts/parse-bookmarks.js",
+    "extract": "node scripts/extract-all.js",
+    "retry": "node scripts/retry-failures.js",
+    "dev": "npx http-server public -p 8080 -c-1"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
