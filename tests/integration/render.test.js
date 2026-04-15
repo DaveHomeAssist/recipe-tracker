@@ -3,7 +3,7 @@
 // proves the production render pipeline is safe.
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { filtered, renderGridHtml, statsFor } from '../../src/recipe-render.js';
+import { filtered, renderCardHtml, renderGridHtml, statsFor } from '../../src/recipe-render.js';
 
 // Sanity fixture used across tests
 const sampleRecipes = [
@@ -14,6 +14,35 @@ const sampleRecipes = [
 ];
 
 describe('renderGridHtml — XSS safety', () => {
+  it('drops a non-http image URL instead of emitting an <img> tag', () => {
+    const html = renderCardHtml({
+      id: 1,
+      name: 'Unsafe image',
+      cuisine: 'Other',
+      image: 'javascript:alert(1)',
+      url: '',
+      tags: '',
+    });
+
+    expect(html).not.toContain('<img');
+    expect(html).toContain('card-image-empty');
+  });
+
+  it('renders a safe hero image with lazy loading and decorative alt text', () => {
+    const html = renderCardHtml({
+      id: 2,
+      name: 'Safe image',
+      cuisine: 'Italian',
+      image: 'https://example.com/x.jpg',
+      url: '',
+      tags: '',
+    });
+
+    expect(html).toContain('<img src="https://example.com/x.jpg"');
+    expect(html).toContain('loading="lazy"');
+    expect(html).toContain('alt=""');
+  });
+
   it('escapes an <img onerror> payload in the name field (no tag survives)', () => {
     const adversarial = {
       id: 999,

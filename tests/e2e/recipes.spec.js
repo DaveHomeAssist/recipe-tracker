@@ -13,7 +13,10 @@ async function freshPage(page) {
   // subsequent page.reload() calls in the test body stay persistent.
   await page.goto('/index.html');
   await page.evaluate(() => {
-    try { localStorage.removeItem('recipe_journal_v3'); } catch {}
+    try {
+      localStorage.removeItem('recipe_journal_v3');
+      localStorage.removeItem('recipe_journal_schema_version');
+    } catch {}
   });
   await page.goto('/index.html');
 }

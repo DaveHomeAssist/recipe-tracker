@@ -2,7 +2,7 @@
 // its inputs explicitly and returns strings or arrays. Safe to import from
 // tests and from the main page.
 
-import { escapeHtml } from './recipe-lib.js';
+import { escapeHtml, safeUrl } from './recipe-lib.js';
 
 export const stars = (n) =>
   Array.from({ length: 5 }, (_, i) => `<span style="opacity:${i < n ? 1 : 0.18}">★</span>`).join('');
@@ -23,10 +23,17 @@ export const filtered = (recipes, { filter = 'all', search = '' } = {}) => {
   });
 };
 
-export const renderCardHtml = (r, i = 0) => `
+export const renderCardHtml = (r, i = 0) => {
+  const imageUrl = safeUrl(r.image);
+  const cardImage = imageUrl
+    ? `<div class="card-image"><img src="${escapeHtml(imageUrl)}" loading="lazy" decoding="async" referrerpolicy="no-referrer" alt=""></div>`
+    : `<div class="card-image card-image-empty" aria-hidden="true"></div>`;
+
+  return `
   <div class="card" style="animation-delay:${i * 0.045}s" data-id="${escapeHtml(r.id)}">
-    <div class="card-banner ${cClass(r.cuisine)}"></div>
+    ${cardImage}
     <div class="card-body">
+      <div class="card-banner ${cClass(r.cuisine)}"></div>
       <div class="card-meta"><span class="card-cuisine">${escapeHtml(r.cuisine || '')}</span><span class="card-stars">${stars(r.rating || 0)}</span></div>
       <div class="card-title">${escapeHtml(r.name)}</div>
       ${r.location ? `<div class="card-origin">${escapeHtml(r.location)}</div>` : ''}
@@ -41,6 +48,7 @@ export const renderCardHtml = (r, i = 0) => `
       </div>
     </div>
   </div>`;
+};
 
 export const renderGridHtml = (recipes, opts = {}) => {
   const list = filtered(recipes, opts);
