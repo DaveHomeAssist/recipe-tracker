@@ -4,6 +4,22 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Our Recipe Journal</title>
+<meta name="description" content="A shared family recipe journal — tastes from restaurants, travels, and kitchens we love. Search, filter, and save the recipes we cook at home.">
+<meta name="theme-color" content="#b5541c">
+<meta name="color-scheme" content="light">
+<link rel="canonical" href="https://davehomeassist.github.io/recipe-tracker/">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23f7f1e8'/%3E%3Ccircle cx='32' cy='34' r='18' fill='%23b5541c'/%3E%3Ccircle cx='32' cy='34' r='14' fill='%23f7f1e8'/%3E%3Ccircle cx='32' cy='34' r='9' fill='%23c9714a'/%3E%3Crect x='28' y='8' width='8' height='18' rx='3' fill='%237a8c6e'/%3E%3C/svg%3E">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Our Recipe Journal">
+<meta property="og:description" content="A shared family recipe journal — tastes from restaurants, travels, and kitchens we love.">
+<meta property="og:url" content="https://davehomeassist.github.io/recipe-tracker/">
+<meta property="og:site_name" content="Our Recipe Journal">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Our Recipe Journal">
+<meta name="twitter:description" content="A shared family recipe journal — tastes from restaurants, travels, and kitchens we love.">
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebApplication","name":"Our Recipe Journal","description":"A shared family recipe journal.","url":"https://davehomeassist.github.io/recipe-tracker/","applicationCategory":"LifestyleApplication","operatingSystem":"Any","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"}}
+</script>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Lato:wght@300;400;700&family=Dancing+Script:wght@600&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -69,6 +85,21 @@
   .filter-btn:hover,.filter-btn.active { background:var(--espresso); border-color:var(--espresso); color:var(--cream); }
   .add-btn { padding:11px 20px; background:var(--sage); color:#fff; border:none; border-radius:6px; font-family:'Lato',sans-serif; font-size:.88rem; font-weight:700; letter-spacing:.05em; cursor:pointer; transition:background .15s,transform .12s; white-space:nowrap; }
   .add-btn:hover { background:#5c7052; transform:translateY(-1px); }
+  .add-btn-primary { padding:12px 24px; font-size:.95rem; box-shadow:0 4px 14px rgba(122,140,110,0.3); }
+  .toolbar-actions { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .btn-toolbar { padding:10px 14px; border:1.5px solid var(--parchment); border-radius:6px; background:var(--warm-white); font-family:'Lato',sans-serif; font-size:.82rem; color:var(--espresso); cursor:pointer; transition:border-color .15s,background .15s; white-space:nowrap; }
+  .btn-toolbar:hover,.btn-toolbar:focus-visible { border-color:var(--gold); background:var(--cream); outline:none; }
+
+  /* ACCESSIBILITY */
+  .visually-hidden { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+  .skip-link { position:absolute; top:-40px; left:8px; background:var(--espresso); color:var(--cream); padding:10px 16px; border-radius:6px; text-decoration:none; font-weight:700; z-index:400; transition:top .15s; }
+  .skip-link:focus { top:8px; outline:2px solid var(--gold); outline-offset:2px; }
+  :focus-visible { outline:2px solid var(--gold); outline-offset:2px; }
+
+  /* UNDO TOAST */
+  .toast-undo { display:flex; align-items:center; gap:14px; max-width:380px; }
+  .toast-undo button { background:var(--gold); color:var(--espresso); border:none; padding:6px 14px; border-radius:4px; font-weight:700; font-size:.82rem; cursor:pointer; font-family:inherit; letter-spacing:.04em; }
+  .toast-undo button:hover,.toast-undo button:focus-visible { background:#d9b85e; outline:none; }
 
   /* STATS */
   .stats-bar { max-width:920px; margin:0 auto 24px; padding:0 24px; display:flex; gap:24px; flex-wrap:wrap; }
@@ -199,42 +230,34 @@
 </head>
 <body>
 
+<a class="skip-link" href="#main">Skip to recipes</a>
+
 <header>
   <div class="header-eyebrow">a shared collection</div>
   <h1>Our <em>Recipe</em> Journal</h1>
   <div class="header-sub">Tastes from restaurants, travels &amp; kitchens we love</div>
 </header>
 
-<!-- IMPORT BANNER -->
-<div class="import-banner">
-  <div class="import-card">
-    <div class="import-card-text">
-      <strong>Add a recipe manually</strong>
-      <span>Click <em>Add Manually</em> below to record a recipe — the name, where you tried it, ingredients, method and notes. Link-based extraction needs a backend (see README) and isn't wired up in this static build.</span>
-    </div>
-  </div>
-</div>
-
 <!-- TOOLBAR -->
-<div class="toolbar">
+<main id="main">
+<div class="toolbar" role="toolbar" aria-label="Recipe toolbar">
   <div class="search-wrap">
-    <input type="text" id="searchInput" placeholder="Search recipes, places, ingredients…">
+    <label for="searchInput" class="visually-hidden">Search recipes</label>
+    <input type="search" id="searchInput" placeholder="Search recipes, places, ingredients…" aria-label="Search recipes">
   </div>
-  <div class="filter-btns" id="filterBtns">
-    <button class="filter-btn active" data-filter="all">All</button>
-    <button class="filter-btn" data-filter="Italian">Italian</button>
-    <button class="filter-btn" data-filter="French">French</button>
-    <button class="filter-btn" data-filter="Japanese">Japanese</button>
-    <button class="filter-btn" data-filter="Mexican">Mexican</button>
-    <button class="filter-btn" data-filter="Indian">Indian</button>
-    <button class="filter-btn" data-filter="Mediterranean">Mediterranean</button>
-    <button class="filter-btn" data-filter="Other">Other</button>
+  <div class="filter-btns" id="filterBtns" role="group" aria-label="Filter by cuisine"></div>
+  <div class="toolbar-actions">
+    <button class="add-btn add-btn-primary" id="openAddBtn" type="button">✏️ Add Recipe</button>
+    <button class="btn-toolbar" id="exportBtn" type="button" aria-label="Export all recipes as a JSON file">⇩ Export</button>
+    <button class="btn-toolbar" id="importBtn" type="button" aria-label="Import recipes from a JSON file">⇧ Import</button>
+    <input type="file" id="importFile" accept="application/json,.json" hidden>
   </div>
-  <button class="add-btn" id="openAddBtn">✏️ Add Manually</button>
+</div>
 </div>
 
-<div class="stats-bar" id="statsBar"></div>
-<div class="recipe-grid" id="recipeGrid"></div>
+<div class="stats-bar" id="statsBar" aria-live="polite"></div>
+<div class="recipe-grid" id="recipeGrid" role="list" aria-label="Recipe grid"></div>
+</main>
 
 <!-- PROGRESS MODAL -->
 <div class="modal-overlay" id="progressModal">
@@ -374,29 +397,48 @@
 
 <div class="toast" id="toast"></div>
 
-<script>
+<script type="module">
 // ══════════════════════════════════════════════
-// SAFETY
+// SAFETY — imported from src/recipe-lib.js (single source of truth, testable)
 // ══════════════════════════════════════════════
-const escapeHtml = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({
-  '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-}[c]));
-const safeUrl = (u) => {
-  const s = String(u ?? '').trim();
-  return /^https?:\/\//i.test(s) ? s : '';
-};
+import { escapeHtml, safeUrl } from './src/recipe-lib.js';
+import { filtered as filteredRecipes, renderGridHtml, statsFor, stars } from './src/recipe-render.js';
 
 // ══════════════════════════════════════════════
 // STATE
 // ══════════════════════════════════════════════
 const KEY = 'recipe_journal_v3';
-let recipes = JSON.parse(localStorage.getItem(KEY) || '[]');
+const SCHEMA_VERSION = 3;
+const FALLBACK_CUISINES = ['Italian','French','Japanese','Mexican','Indian','American','Mediterranean','Thai','Chinese','Greek','Spanish','Other'];
+
+function loadRecipes() {
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    console.error('loadRecipes failed:', e);
+    return [];
+  }
+}
+
+let recipes = loadRecipes();
 let editingId = null, viewingId = null;
 let currentFilter = 'all', currentSearch = '';
 let fRating = 0, rvRating = 0;
 let rvQueue = [], rvIdx = 0;
+let lastFocusedBeforeModal = null;
 
-function persist() { localStorage.setItem(KEY, JSON.stringify(recipes)); }
+function persist() {
+  try {
+    localStorage.setItem(KEY, JSON.stringify(recipes));
+  } catch (e) {
+    // QuotaExceededError, private-mode Safari, etc. Surface it so users notice.
+    console.error('persist failed:', e);
+    showToast('⚠️ Could not save — storage is full or disabled. Export your recipes to keep them safe.');
+  }
+}
 
 // Seed
 if (!recipes.length) {
@@ -405,67 +447,121 @@ if (!recipes.length) {
 }
 
 // ══════════════════════════════════════════════
-// RENDER
+// RENDER — thin wrapper. Pure HTML generation lives in src/recipe-render.js
 // ══════════════════════════════════════════════
-const stars = n => Array.from({length:5},(_,i)=>`<span style="opacity:${i<n?1:.18}">★</span>`).join('');
-const cClass = c => 'cuisine-'+(c||'other').toLowerCase().replace(/[\s/]+/g,'-');
-const filtered = () => recipes.filter(r => {
-  const mf = currentFilter==='all' || r.cuisine===currentFilter;
-  const q = currentSearch.toLowerCase();
-  const ms = !q || [r.name,r.location,r.source,r.notes,r.tags,r.ingredients].some(f=>(f||'').toLowerCase().includes(q));
-  return mf && ms;
-});
-
 function renderStats() {
-  const cu = [...new Set(recipes.map(r=>r.cuisine))].length;
-  const lo = [...new Set(recipes.map(r=>r.location).filter(Boolean))].length;
+  const s = statsFor(recipes);
   document.getElementById('statsBar').innerHTML =
-    `<div class="stat-chip"><strong>${recipes.length}</strong> recipes</div>
-     <div class="stat-chip"><strong>${cu}</strong> cuisines</div>
-     <div class="stat-chip"><strong>${lo}</strong> locations</div>`;
+    `<div class="stat-chip"><strong>${s.count}</strong> recipes</div>
+     <div class="stat-chip"><strong>${s.cuisines}</strong> cuisines</div>
+     <div class="stat-chip"><strong>${s.locations}</strong> locations</div>`;
 }
 
 function renderGrid() {
-  const list = filtered();
   const g = document.getElementById('recipeGrid');
-  if (!list.length) {
-    g.innerHTML=`<div class="empty-state"><div class="ei">🍽️</div><p>No recipes yet — paste a link above or add one manually.</p></div>`;
-    return;
-  }
-  g.innerHTML = list.map((r,i)=>`
-    <div class="card" style="animation-delay:${i*.045}s" data-id="${escapeHtml(r.id)}">
-      <div class="card-banner ${cClass(r.cuisine)}"></div>
-      <div class="card-body">
-        <div class="card-meta"><span class="card-cuisine">${escapeHtml(r.cuisine||'')}</span><span class="card-stars">${stars(r.rating||0)}</span></div>
-        <div class="card-title">${escapeHtml(r.name)}</div>
-        ${r.location?`<div class="card-origin">${escapeHtml(r.location)}</div>`:''}
-        ${r.notes?`<div class="card-notes">${escapeHtml(r.notes)}</div>`:''}
-        ${r.url?`<div class="card-link">🔗 ${escapeHtml(r.url)}</div>`:''}
-      </div>
-      <div class="card-footer">
-        <div class="card-tags">${(r.tags||'').split(',').filter(Boolean).slice(0,3).map(t=>`<span class="tag">${escapeHtml(t.trim())}</span>`).join('')}</div>
-        <div class="card-actions">
-          <button class="icon-btn edit-btn" data-id="${escapeHtml(r.id)}">✏️</button>
-          <button class="icon-btn del-btn" data-id="${escapeHtml(r.id)}">🗑️</button>
-        </div>
-      </div>
-    </div>`).join('');
+  g.innerHTML = renderGridHtml(recipes, { filter: currentFilter, search: currentSearch });
   g.querySelectorAll('.card').forEach(el=>el.addEventListener('click',e=>{
     if(e.target.closest('.edit-btn')||e.target.closest('.del-btn')) return;
     openView(+el.dataset.id);
   }));
   g.querySelectorAll('.edit-btn').forEach(el=>el.addEventListener('click',e=>{e.stopPropagation();openEdit(+el.dataset.id);}));
   g.querySelectorAll('.del-btn').forEach(el=>el.addEventListener('click',e=>{e.stopPropagation();del(+el.dataset.id);}));
+  g.querySelectorAll('.edit-btn').forEach(b => b.setAttribute('aria-label', 'Edit recipe'));
+  g.querySelectorAll('.del-btn').forEach(b => b.setAttribute('aria-label', 'Delete recipe'));
+  g.querySelectorAll('.card').forEach(c => { c.setAttribute('role', 'listitem'); c.setAttribute('tabindex', '0'); });
 }
 
-function render() { renderStats(); renderGrid(); }
+function renderFilterChips() {
+  // Auto-generate chips from the cuisines actually present in the data.
+  // Fall back to the stock list when the library is tiny.
+  const present = [...new Set(recipes.map(r => (r && r.cuisine) || '').filter(Boolean))];
+  const seed = present.length >= 3 ? present : FALLBACK_CUISINES;
+  const ordered = ['All', ...seed.sort((a,b)=>a.localeCompare(b))];
+  const host = document.getElementById('filterBtns');
+  host.innerHTML = ordered.map(c => {
+    const val = c === 'All' ? 'all' : c;
+    const active = val === currentFilter ? ' active' : '';
+    const pressed = val === currentFilter ? 'true' : 'false';
+    return `<button class="filter-btn${active}" type="button" role="button" aria-pressed="${pressed}" data-filter="${escapeHtml(val)}">${escapeHtml(c)}</button>`;
+  }).join('');
+}
+
+function render() { renderFilterChips(); renderStats(); renderGrid(); }
 
 document.getElementById('filterBtns').addEventListener('click',e=>{
   const b=e.target.closest('.filter-btn'); if(!b) return;
-  document.querySelectorAll('.filter-btn').forEach(x=>x.classList.remove('active'));
-  b.classList.add('active'); currentFilter=b.dataset.filter; render();
+  currentFilter=b.dataset.filter;
+  render();
 });
-document.getElementById('searchInput').addEventListener('input',e=>{ currentSearch=e.target.value; render(); });
+document.getElementById('searchInput').addEventListener('input',e=>{ currentSearch=e.target.value; renderStats(); renderGrid(); });
+
+// ──────────────────────────────────────────────
+// EXPORT / IMPORT JSON
+// ──────────────────────────────────────────────
+function exportRecipes() {
+  const payload = { schemaVersion: SCHEMA_VERSION, exportedAt: new Date().toISOString(), recipes };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const today = new Date().toISOString().slice(0,10);
+  a.href = url; a.download = `recipe-journal-${today}.json`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast(`Exported ${recipes.length} recipes ✓`);
+}
+
+function importRecipes(file) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const data = JSON.parse(String(reader.result));
+      const incoming = Array.isArray(data) ? data : (Array.isArray(data.recipes) ? data.recipes : null);
+      if (!incoming) throw new Error('file is not a recipe journal export');
+      const version = data && data.schemaVersion;
+      if (version && version > SCHEMA_VERSION) {
+        showToast(`⚠️ This file is from a newer version (v${version}). Cannot import safely.`);
+        return;
+      }
+      const mode = confirm(`Found ${incoming.length} recipes in the file.\n\nOK  = Merge with your current library (duplicates by URL are skipped)\nCancel = Replace your entire library with the imported file`);
+      if (mode) {
+        // Merge: combine, then dedupe by url (case-insensitive) keeping existing records first.
+        const byUrl = new Map();
+        const noUrl = [];
+        for (const r of recipes) {
+          const k = (r && r.url ? String(r.url).trim().toLowerCase() : '');
+          if (k) { if (!byUrl.has(k)) byUrl.set(k, r); } else { noUrl.push(r); }
+        }
+        let added = 0;
+        for (const r of incoming) {
+          const k = (r && r.url ? String(r.url).trim().toLowerCase() : '');
+          if (k && byUrl.has(k)) continue;
+          if (k) byUrl.set(k, r); else noUrl.push(r);
+          added++;
+        }
+        recipes = [...byUrl.values(), ...noUrl];
+        persist(); render();
+        showToast(`Merged ${added} new recipes (${incoming.length - added} duplicates skipped).`);
+      } else {
+        if (!confirm(`Replace your entire library with ${incoming.length} imported recipes? This cannot be undone (unless you exported a backup first).`)) return;
+        recipes = incoming;
+        persist(); render();
+        showToast(`Replaced library with ${incoming.length} recipes.`);
+      }
+    } catch (e) {
+      console.error('import failed:', e);
+      showToast(`⚠️ Import failed: ${e.message || 'invalid file'}`);
+    }
+  };
+  reader.readAsText(file);
+}
+
+document.getElementById('exportBtn').addEventListener('click', exportRecipes);
+document.getElementById('importBtn').addEventListener('click', () => document.getElementById('importFile').click());
+document.getElementById('importFile').addEventListener('change', (e) => {
+  const f = e.target.files && e.target.files[0];
+  e.target.value = '';
+  if (f) importRecipes(f);
+});
 
 // ══════════════════════════════════════════════
 // REVIEW MODAL (reachable only when a backend wires in extraction)
@@ -614,17 +710,51 @@ document.getElementById('editViewBtn').addEventListener('click',()=>openEdit(vie
 document.getElementById('deleteViewBtn').addEventListener('click',()=>{ del(viewingId); closeModal('viewModal'); });
 
 function del(id) {
-  if(!confirm('Remove this recipe from the journal?')) return;
-  recipes=recipes.filter(x=>x.id!==id); persist(); render(); showToast('Recipe removed.');
+  const idx = recipes.findIndex(x=>x.id===id);
+  if (idx === -1) return;
+  const removed = recipes[idx];
+  recipes.splice(idx, 1);
+  persist(); render();
+  showUndoToast(`"${removed.name}" deleted`, () => {
+    recipes.splice(idx, 0, removed);
+    persist(); render();
+    showToast('Recipe restored ✓');
+  });
 }
 
 // ══════════════════════════════════════════════
 // MODALS & TOAST
 // ══════════════════════════════════════════════
-const openModal = id=>document.getElementById(id).classList.add('open');
-const closeModal = id=>document.getElementById(id).classList.remove('open');
+function openModal(id) {
+  lastFocusedBeforeModal = document.activeElement;
+  const el = document.getElementById(id);
+  el.classList.add('open');
+  // Move focus to the first focusable element inside the modal.
+  const firstFocusable = el.querySelector('input,select,textarea,button,[tabindex]:not([tabindex="-1"])');
+  if (firstFocusable) setTimeout(() => firstFocusable.focus(), 50);
+}
+function closeModal(id) {
+  const el = document.getElementById(id);
+  el.classList.remove('open');
+  // Restore focus to whatever opened the modal.
+  if (lastFocusedBeforeModal && document.contains(lastFocusedBeforeModal)) {
+    try { lastFocusedBeforeModal.focus(); } catch {}
+  }
+}
 document.querySelectorAll('.modal-overlay').forEach(el=>el.addEventListener('click',e=>{ if(e.target===el) closeModal(el.id); }));
 document.addEventListener('keydown',e=>{ if(e.key==='Escape') ['formModal','viewModal','reviewModal','progressModal'].forEach(closeModal); });
+
+// Focus trap for any .modal-overlay.open
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Tab') return;
+  const openOverlay = document.querySelector('.modal-overlay.open');
+  if (!openOverlay) return;
+  const focusables = openOverlay.querySelectorAll('input,select,textarea,button:not([disabled]),a[href],[tabindex]:not([tabindex="-1"])');
+  if (!focusables.length) return;
+  const first = focusables[0], last = focusables[focusables.length - 1];
+  if (e.shiftKey && document.activeElement === first) { last.focus(); e.preventDefault(); }
+  else if (!e.shiftKey && document.activeElement === last) { first.focus(); e.preventDefault(); }
+});
 
 let toastT;
 function showToast(msg) {
@@ -632,6 +762,61 @@ function showToast(msg) {
   t.textContent=msg; t.classList.add('show');
   clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),3000);
 }
+
+// Undo toast: shown on delete, 6s to change your mind.
+let undoT;
+function showUndoToast(msg, onUndo) {
+  const t = document.getElementById('toast');
+  t.innerHTML = '';
+  const wrap = document.createElement('div');
+  wrap.className = 'toast-undo';
+  const text = document.createElement('span');
+  text.textContent = msg;
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.textContent = 'Undo';
+  btn.addEventListener('click', () => {
+    clearTimeout(undoT);
+    t.classList.remove('show');
+    onUndo();
+  });
+  wrap.appendChild(text); wrap.appendChild(btn);
+  t.appendChild(wrap);
+  t.classList.add('show');
+  clearTimeout(undoT);
+  undoT = setTimeout(() => {
+    t.classList.remove('show');
+    // Next regular showToast() will reset innerHTML via textContent.
+  }, 6000);
+}
+
+// A11y post-pass: wire `<label>` to its form-group's first input via `for`,
+// label icon-only .close-btn buttons, and label .icon-btn buttons inside cards.
+(function a11yPass() {
+  document.querySelectorAll('.form-group').forEach(group => {
+    const label = group.querySelector('label');
+    const input = group.querySelector('input,select,textarea');
+    if (label && input && input.id && !label.getAttribute('for')) {
+      label.setAttribute('for', input.id);
+    }
+  });
+  document.querySelectorAll('.close-btn').forEach(b => {
+    if (!b.getAttribute('aria-label')) b.setAttribute('aria-label', 'Close');
+  });
+  document.querySelectorAll('.modal').forEach(m => {
+    if (!m.getAttribute('role')) m.setAttribute('role', 'dialog');
+    if (!m.getAttribute('aria-modal')) m.setAttribute('aria-modal', 'true');
+  });
+  document.querySelectorAll('.star-option').forEach(s => {
+    s.setAttribute('role', 'button');
+    s.setAttribute('tabindex', '0');
+    const v = s.dataset.v;
+    s.setAttribute('aria-label', `Rate ${v} star${v === '1' ? '' : 's'}`);
+    s.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); s.click(); }
+    });
+  });
+})();
 
 render();
 </script>
