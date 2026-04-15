@@ -1,0 +1,17 @@
+{
+  "name": "recipe-tracker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:unit": "vitest run tests/unit",
+    "test:integration": "vitest run tests/integration",
+    "test:e2e": "playwright test",
+    "serve": "python3 -m http.server 8787"
+  },
+  "devDependencies": {
+    "vitest": "^2.1.9",
+    "jsdom": "^25.0.1",
+    "@playwright/test": "^1.49.1"
+  }
+}
