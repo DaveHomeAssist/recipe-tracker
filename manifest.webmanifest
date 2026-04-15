@@ -1,0 +1,18 @@
+{
+  "name": "Our Recipe Journal",
+  "short_name": "Recipes",
+  "description": "A shared family recipe journal for restaurant favorites, travels, and home cooking.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f7f1e8",
+  "theme_color": "#b5541c",
+  "icons": [
+    {
+      "src": "./favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

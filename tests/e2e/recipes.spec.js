@@ -138,6 +138,50 @@ test('no console errors or uncaught exceptions on load', async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
+test('import validates recipes before merge and reports dropped invalid rows', async ({ page }) => {
+  await freshPage(page);
+  await page.locator('.recipe-grid .card').first().waitFor();
+
+  page.once('dialog', (dialog) => dialog.accept());
+  await page.locator('#importFile').setInputFiles({
+    name: 'recipes.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(
+      JSON.stringify({
+        schemaVersion: 4,
+        recipes: [
+          {
+            id: 123,
+            name: 'Imported Rigatoni',
+            cuisine: 'Italian',
+            rating: 99,
+            url: 'javascript:alert(1)',
+            image: 'javascript:alert(2)',
+            extraField: 'strip me',
+          },
+          {
+            cuisine: 'Italian',
+            notes: 'missing name should drop',
+          },
+        ],
+      })
+    ),
+  });
+
+  await expect(page.locator('#toast')).toContainText('Dropped 1 invalid recipe');
+
+  await page.locator('#searchInput').fill('Imported Rigatoni');
+  await expect(page.locator('.recipe-grid .card')).toHaveCount(1);
+  await expect(page.locator('.recipe-grid .card .card-title')).toHaveText('Imported Rigatoni');
+  await expect(page.locator('.recipe-grid .card .card-stars')).toContainText('★');
+
+  await page.locator('.recipe-grid .card').first().click();
+  await expect(page.locator('#viewModal')).toHaveClass(/open/);
+  await expect(page.locator('#v-name')).toHaveText('Imported Rigatoni');
+  await expect(page.locator('#viewBody')).not.toContainText('Original Source URL');
+  await expect(page.locator('#viewBody')).not.toContainText('javascript:alert(1)');
+});
+
 test('XSS hardening: a manually added recipe with an <img onerror> name renders as text', async ({ page }) => {
   // Pre-seed an adversarial recipe into localStorage, then load the page.
   await page.addInitScript(() => {

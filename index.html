@@ -8,7 +8,8 @@
 <meta name="theme-color" content="#b5541c">
 <meta name="color-scheme" content="light">
 <link rel="canonical" href="https://davehomeassist.github.io/recipe-tracker/">
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23f7f1e8'/%3E%3Ccircle cx='32' cy='34' r='18' fill='%23b5541c'/%3E%3Ccircle cx='32' cy='34' r='14' fill='%23f7f1e8'/%3E%3Ccircle cx='32' cy='34' r='9' fill='%23c9714a'/%3E%3Crect x='28' y='8' width='8' height='18' rx='3' fill='%237a8c6e'/%3E%3C/svg%3E">
+<link rel="icon" type="image/svg+xml" href="./favicon.svg">
+<link rel="manifest" href="./manifest.webmanifest">
 <meta property="og:type" content="website">
 <meta property="og:title" content="Our Recipe Journal">
 <meta property="og:description" content="A shared family recipe journal — tastes from restaurants, travels, and kitchens we love.">
@@ -100,6 +101,9 @@
   .toast-undo { display:flex; align-items:center; gap:14px; max-width:380px; }
   .toast-undo button { background:var(--gold); color:var(--espresso); border:none; padding:6px 14px; border-radius:4px; font-weight:700; font-size:.82rem; cursor:pointer; font-family:inherit; letter-spacing:.04em; }
   .toast-undo button:hover,.toast-undo button:focus-visible { background:#d9b85e; outline:none; }
+  .toast-action { display:flex; align-items:center; gap:14px; max-width:420px; }
+  .toast-action button { background:var(--gold); color:var(--espresso); border:none; padding:6px 14px; border-radius:4px; font-weight:700; font-size:.82rem; cursor:pointer; font-family:inherit; letter-spacing:.04em; }
+  .toast-action button:hover,.toast-action button:focus-visible { background:#d9b85e; outline:none; }
 
   /* STATS */
   .stats-bar { max-width:920px; margin:0 auto 24px; padding:0 24px; display:flex; gap:24px; flex-wrap:wrap; }
@@ -317,6 +321,7 @@
 // ══════════════════════════════════════════════
 import { escapeHtml, safeUrl } from './src/recipe-lib.js';
 import { filtered as filteredRecipes, renderGridHtml, statsFor, stars } from './src/recipe-render.js';
+import { validateImport } from './src/recipe-schema.js';
 import { mergeSeedImages } from './src/seed-images.js';
 
 // ══════════════════════════════════════════════
@@ -358,6 +363,29 @@ let currentFilter = 'all', currentSearch = '';
 let fRating = 0;
 let lastFocusedBeforeModal = null;
 const initialSchemaVersion = getStoredSchemaVersion();
+let deferredInstallPrompt = null;
+let pendingUpdateWorker = null;
+let toastTimer = null;
+let swReloaded = false;
+let shouldReloadForUpdate = false;
+
+const sameId = (a, b) => String(a) === String(b);
+const makeRecipeId = () =>
+  globalThis.crypto?.randomUUID?.() || `recipe-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+function withUniqueIds(baseRecipes, incomingRecipes) {
+  const used = new Set(baseRecipes.map((recipe) => String(recipe?.id ?? '')));
+  return incomingRecipes.map((recipe) => {
+    let id = String(recipe?.id ?? '');
+    if (!id || used.has(id)) {
+      do {
+        id = makeRecipeId();
+      } while (used.has(id));
+    }
+    used.add(id);
+    return { ...recipe, id };
+  });
+}
 
 function persist(options = {}) {
   const { markSchema = true } = options;
@@ -393,10 +421,10 @@ function renderGrid() {
   g.innerHTML = renderGridHtml(recipes, { filter: currentFilter, search: currentSearch });
   g.querySelectorAll('.card').forEach(el=>el.addEventListener('click',e=>{
     if(e.target.closest('.edit-btn')||e.target.closest('.del-btn')) return;
-    openView(+el.dataset.id);
+    openView(el.dataset.id);
   }));
-  g.querySelectorAll('.edit-btn').forEach(el=>el.addEventListener('click',e=>{e.stopPropagation();openEdit(+el.dataset.id);}));
-  g.querySelectorAll('.del-btn').forEach(el=>el.addEventListener('click',e=>{e.stopPropagation();del(+el.dataset.id);}));
+  g.querySelectorAll('.edit-btn').forEach(el=>el.addEventListener('click',e=>{e.stopPropagation();openEdit(el.dataset.id);}));
+  g.querySelectorAll('.del-btn').forEach(el=>el.addEventListener('click',e=>{e.stopPropagation();del(el.dataset.id);}));
   g.querySelectorAll('.edit-btn').forEach(b => b.setAttribute('aria-label', 'Edit recipe'));
   g.querySelectorAll('.del-btn').forEach(b => b.setAttribute('aria-label', 'Delete recipe'));
   g.querySelectorAll('.card').forEach(c => { c.setAttribute('role', 'listitem'); c.setAttribute('tabindex', '0'); });
@@ -462,15 +490,19 @@ function importRecipes(file) {
   reader.onload = () => {
     try {
       const data = JSON.parse(String(reader.result));
-      const incoming = Array.isArray(data) ? data : (Array.isArray(data.recipes) ? data.recipes : null);
-      if (!incoming) throw new Error('file is not a recipe journal export');
+      const validated = validateImport(data);
+      if (!validated.ok) throw new Error(validated.error);
+      const incoming = validated.recipes;
+      const dropped = validated.dropped;
       const version = data && data.schemaVersion;
       if (version && version > SCHEMA_VERSION) {
         showToast(`⚠️ This file is from a newer version (v${version}). Cannot import safely.`);
         return;
       }
+      const droppedMsg = dropped ? ` Dropped ${dropped} invalid recipe${dropped === 1 ? '' : 's'}.` : '';
       const mode = confirm(`Found ${incoming.length} recipes in the file.\n\nOK  = Merge with your current library (duplicates by URL are skipped)\nCancel = Replace your entire library with the imported file`);
       if (mode) {
+        const normalizedIncoming = withUniqueIds(recipes, incoming);
         // Merge: combine, then dedupe by url (case-insensitive) keeping existing records first.
         const byUrl = new Map();
         const noUrl = [];
@@ -479,7 +511,7 @@ function importRecipes(file) {
           if (k) { if (!byUrl.has(k)) byUrl.set(k, r); } else { noUrl.push(r); }
         }
         let added = 0;
-        for (const r of incoming) {
+        for (const r of normalizedIncoming) {
           const k = (r && r.url ? String(r.url).trim().toLowerCase() : '');
           if (k && byUrl.has(k)) continue;
           if (k) byUrl.set(k, r); else noUrl.push(r);
@@ -487,12 +519,12 @@ function importRecipes(file) {
         }
         recipes = [...byUrl.values(), ...noUrl];
         persist(); render();
-        showToast(`Merged ${added} new recipes (${incoming.length - added} duplicates skipped).`);
+        showToast(`Merged ${added} new recipes (${incoming.length - added} duplicates skipped).${droppedMsg}`);
       } else {
         if (!confirm(`Replace your entire library with ${incoming.length} imported recipes? This cannot be undone (unless you exported a backup first).`)) return;
-        recipes = incoming;
+        recipes = withUniqueIds([], incoming);
         persist(); render();
-        showToast(`Replaced library with ${incoming.length} recipes.`);
+        showToast(`Replaced library with ${incoming.length} recipes.${droppedMsg}`);
       }
     } catch (e) {
       console.error('import failed:', e);
@@ -525,7 +557,7 @@ function openAdd() {
   setFStars(0); openModal('formModal');
 }
 function openEdit(id) {
-  const r=recipes.find(x=>x.id===id); if(!r) return;
+  const r=recipes.find(x=>sameId(x.id, id)); if(!r) return;
   editingId=id;
   document.getElementById('modalTitle').textContent='Edit Recipe';
   ['name','source','location','ingredients','instructions','preptime','cooktime','servings','tags','notes','url','date'].forEach(f=>{
@@ -543,7 +575,7 @@ document.getElementById('saveFormBtn').addEventListener('click',()=>{
   const name=document.getElementById('f-name').value.trim();
   if(!name){ showToast('Please enter a recipe name.'); return; }
   const r={
-    id:editingId||(Date.now()+Math.random()), name,
+    id:editingId||makeRecipeId(), name,
     cuisine:document.getElementById('f-cuisine').value,
     source:document.getElementById('f-source').value.trim(),
     location:document.getElementById('f-location').value.trim(),
@@ -558,7 +590,7 @@ document.getElementById('saveFormBtn').addEventListener('click',()=>{
     date:document.getElementById('f-date').value,
     rating:fRating
   };
-  if(editingId){ const i=recipes.findIndex(x=>x.id===editingId); if(i>-1) recipes[i]=r; }
+  if(editingId){ const i=recipes.findIndex(x=>sameId(x.id, editingId)); if(i>-1) recipes[i]=r; }
   else recipes.unshift(r);
   persist(); closeModal('formModal'); render();
   showToast(editingId?'Recipe updated ✓':'Recipe saved ✓');
@@ -568,7 +600,7 @@ document.getElementById('saveFormBtn').addEventListener('click',()=>{
 // VIEW
 // ══════════════════════════════════════════════
 function openView(id) {
-  const r=recipes.find(x=>x.id===id); if(!r) return;
+  const r=recipes.find(x=>sameId(x.id, id)); if(!r) return;
   viewingId=id;
   document.getElementById('v-name').textContent=r.name;
   document.getElementById('v-sub').innerHTML=`${escapeHtml(r.cuisine||'')}${r.source?' · '+escapeHtml(r.source):''}${r.location?' · '+escapeHtml(r.location):''}&nbsp;&nbsp;${stars(r.rating||0)}`;
@@ -597,7 +629,7 @@ document.getElementById('editViewBtn').addEventListener('click',()=>openEdit(vie
 document.getElementById('deleteViewBtn').addEventListener('click',()=>{ del(viewingId); closeModal('viewModal'); });
 
 function del(id) {
-  const idx = recipes.findIndex(x=>x.id===id);
+  const idx = recipes.findIndex(x=>sameId(x.id, id));
   if (idx === -1) return;
   const removed = recipes[idx];
   recipes.splice(idx, 1);
@@ -643,15 +675,45 @@ document.addEventListener('keydown', (e) => {
   else if (!e.shiftKey && document.activeElement === last) { first.focus(); e.preventDefault(); }
 });
 
-let toastT;
+function hideToast() {
+  document.getElementById('toast').classList.remove('show');
+}
+
+function resetToastTimer(timeout = 3000) {
+  clearTimeout(toastTimer);
+  if (!timeout) return;
+  toastTimer = setTimeout(() => hideToast(), timeout);
+}
+
 function showToast(msg) {
   const t=document.getElementById('toast');
   t.textContent=msg; t.classList.add('show');
-  clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),3000);
+  resetToastTimer(3000);
+}
+
+function showActionToast(msg, label, onAction, timeout = 12000) {
+  const t = document.getElementById('toast');
+  t.innerHTML = '';
+  const wrap = document.createElement('div');
+  wrap.className = 'toast-action';
+  const text = document.createElement('span');
+  text.textContent = msg;
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.textContent = label;
+  btn.addEventListener('click', async () => {
+    clearTimeout(toastTimer);
+    await onAction();
+    hideToast();
+  });
+  wrap.appendChild(text);
+  wrap.appendChild(btn);
+  t.appendChild(wrap);
+  t.classList.add('show');
+  resetToastTimer(timeout);
 }
 
 // Undo toast: shown on delete, 6s to change your mind.
-let undoT;
 function showUndoToast(msg, onUndo) {
   const t = document.getElementById('toast');
   t.innerHTML = '';
@@ -663,18 +725,67 @@ function showUndoToast(msg, onUndo) {
   btn.type = 'button';
   btn.textContent = 'Undo';
   btn.addEventListener('click', () => {
-    clearTimeout(undoT);
-    t.classList.remove('show');
+    clearTimeout(toastTimer);
+    hideToast();
     onUndo();
   });
   wrap.appendChild(text); wrap.appendChild(btn);
   t.appendChild(wrap);
   t.classList.add('show');
-  clearTimeout(undoT);
-  undoT = setTimeout(() => {
-    t.classList.remove('show');
-    // Next regular showToast() will reset innerHTML via textContent.
-  }, 6000);
+  resetToastTimer(6000);
+}
+
+function promptForUpdate(worker) {
+  if (!worker || pendingUpdateWorker === worker) return;
+  pendingUpdateWorker = worker;
+  showActionToast('New version available.', 'Refresh', async () => {
+    shouldReloadForUpdate = true;
+    worker.postMessage({ type: 'SKIP_WAITING' });
+  }, 15000);
+}
+
+async function registerServiceWorker() {
+  if (!('serviceWorker' in navigator)) return;
+
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!shouldReloadForUpdate || swReloaded) return;
+    swReloaded = true;
+    window.location.reload();
+  });
+
+  window.addEventListener('beforeinstallprompt', (event) => {
+    event.preventDefault();
+    deferredInstallPrompt = event;
+    showActionToast('Install Recipe Journal for offline use?', 'Install', async () => {
+      if (!deferredInstallPrompt) return;
+      const promptEvent = deferredInstallPrompt;
+      deferredInstallPrompt = null;
+      await promptEvent.prompt();
+      const choice = await promptEvent.userChoice;
+      if (choice?.outcome === 'accepted') {
+        showToast('Recipe Journal installed ✓');
+      }
+    }, 15000);
+  });
+
+  try {
+    const registration = await navigator.serviceWorker.register('./service-worker.js');
+    if (registration.waiting && navigator.serviceWorker.controller) {
+      promptForUpdate(registration.waiting);
+    }
+
+    registration.addEventListener('updatefound', () => {
+      const worker = registration.installing;
+      if (!worker) return;
+      worker.addEventListener('statechange', () => {
+        if (worker.state === 'installed' && navigator.serviceWorker.controller) {
+          promptForUpdate(worker);
+        }
+      });
+    });
+  } catch (e) {
+    console.error('service worker registration failed:', e);
+  }
 }
 
 // A11y post-pass: wire `<label>` to its form-group's first input via `for`,
@@ -709,6 +820,7 @@ render();
 if (initialSchemaVersion < SCHEMA_VERSION) {
   migrateSeedImagesIfNeeded();
 }
+registerServiceWorker();
 </script>
 </body>
 </html>

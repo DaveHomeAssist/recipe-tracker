@@ -10,16 +10,20 @@ A shared family recipe journal. Single-file static web app, no backend, no build
 - Add, edit, delete recipes. Delete has a 6-second undo toast.
 - Star ratings, prep/cook time, servings, source URL, free-form notes.
 - Export / Import the full library as JSON for backup or sync between devices.
+- Import validation strips unknown fields, drops nameless records, and sanitizes unsafe URLs before merge/replace.
+- Installable and offline-capable after one warm load via a service worker and web app manifest.
 - Keyboard and screen-reader accessible: skip link, focus trap in modals, labeled icon buttons, keyboard-operable star rating.
 
 ## Running locally
 
-Just open `index.html` in a browser — or serve it:
+Serve it locally:
 
 ```bash
-python3 -m http.server 8787
+python3 scripts/static_server.py
 # then visit http://127.0.0.1:8787/
 ```
+
+The core UI is static, but the PWA features (service worker, offline cache, install prompt) only work over `http://127.0.0.1` or a hosted origin.
 
 ## Architecture
 
@@ -28,12 +32,16 @@ index.html              single-file app, inlines CSS and a small module script
 src/
   recipe-lib.js         pure: escapeHtml, safeUrl, dedupeByUrl
   recipe-render.js      pure: filtered, renderCardHtml, renderGridHtml, statsFor
+  recipe-schema.js      pure: validateRecipe, validateImport
+service-worker.js       offline cache + update handling
+manifest.webmanifest    install metadata
+favicon.svg             app icon for browser + manifest
 build/                  one-shot extractor + (planned) Vercel proxy, not served
 tests/
   unit/                 Vitest (jsdom) — helpers
   integration/          Vitest (jsdom) — render pipeline + stored XSS
-  e2e/                  Playwright (chromium) — real browser flows
-TEST_REPORT.md          53/53 passing, last run 2026-04-15
+  e2e/                  Playwright — browser flows, mobile, offline
+TEST_REPORT.md          historical test summary
 CHANGELOG.md            user-facing changes
 AUDIT.md                Phase 2 audit findings and known gaps
 ```
@@ -41,16 +49,31 @@ AUDIT.md                Phase 2 audit findings and known gaps
 ### Storage
 
 - Key: `recipe_journal_v3`
+- Schema marker: `recipe_journal_schema_version = 4`
 - Shape: a JSON array of recipe objects.
-- Export wraps the array in `{ schemaVersion: 3, exportedAt: <ISO8601>, recipes: [...] }`.
-- Import accepts either the wrapped shape or a bare array, refuses newer schema versions, and offers Merge (dedupe by URL) or Replace on conflict.
+- Export wraps the array in `{ schemaVersion: 4, exportedAt: <ISO8601>, recipes: [...] }`.
+- Import accepts either the wrapped shape or a bare array, refuses newer schema versions, validates every record through `src/recipe-schema.js`, and offers Merge (dedupe by URL) or Replace on conflict.
 
 ### Security
 
 - All `innerHTML` sinks route through `escapeHtml()` (`src/recipe-lib.js`).
 - Source URLs validated by `safeUrl()` — only `http(s):` schemes reach `href`.
+- Imported recipes are schema-validated before merge/replace, with unknown fields stripped and invalid rows dropped.
 - The Vitest integration suite injects adversarial recipes (`<img onerror>`, stored XSS via localStorage) and asserts the rendered DOM is inert.
 - The Playwright E2E suite repeats the stored-XSS check in a real browser with a `window.__xssFired` sentinel.
+
+## PWA / offline
+
+- `service-worker.js` precaches the app shell and serves cached content first while refreshing in the background.
+- `manifest.webmanifest` makes the site installable as a standalone app.
+- When an updated service worker is ready, the UI shows a refresh toast so users opt into the new version.
+
+If a bad service worker ever gets cached, unregister it and clear the cache:
+
+```js
+await navigator.serviceWorker.getRegistrations().then((regs) => Promise.all(regs.map((reg) => reg.unregister())));
+await caches.keys().then((keys) => Promise.all(keys.filter((key) => key.startsWith('recipe-journal-')).map((key) => caches.delete(key))));
+```
 
 ## Testing
 
@@ -58,7 +81,7 @@ AUDIT.md                Phase 2 audit findings and known gaps
 npm install
 npx playwright install chromium   # one-time, downloads the browser binary
 npx vitest run                    # unit + integration (~5 s)
-npx playwright test               # E2E (~20 s, auto-starts local server)
+npx playwright test               # E2E + mobile + offline + visual, auto-starts local server
 ```
 
 To run E2E against the live Pages site:

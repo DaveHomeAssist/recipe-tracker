@@ -7,7 +7,7 @@
     "test:unit": "vitest run tests/unit",
     "test:integration": "vitest run tests/integration",
     "test:e2e": "playwright test",
-    "serve": "python3 -m http.server 8787"
+    "serve": "python3 scripts/static_server.py"
   },
   "devDependencies": {
     "vitest": "^2.1.9",
