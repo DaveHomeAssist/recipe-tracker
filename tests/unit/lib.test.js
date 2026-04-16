@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { escapeHtml, safeUrl, dedupeByUrl } from '../../src/recipe-lib.js';
+import { escapeHtml, safeUrl, dedupeByUrl, normalizeTags } from '../../src/recipe-lib.js';
 
 describe('escapeHtml', () => {
   it('escapes all five reserved HTML characters', () => {
@@ -153,5 +153,42 @@ describe('dedupeByUrl', () => {
     const elapsed = performance.now() - t0;
     expect(out).toHaveLength(5000);
     expect(elapsed).toBeLessThan(100);
+  });
+});
+
+describe('normalizeTags', () => {
+  it('title-cases each tag', () => {
+    expect(normalizeTags('quick, date night')).toBe('Quick, Date Night');
+  });
+
+  it('trims whitespace and collapses internal runs', () => {
+    expect(normalizeTags('  quick ,  date   night  , easy ')).toBe('Quick, Date Night, Easy');
+  });
+
+  it('deduplicates case-insensitively, keeping first occurrence', () => {
+    expect(normalizeTags('Quick, quick, QUICK')).toBe('Quick');
+  });
+
+  it('drops empty fragments from leading/trailing commas', () => {
+    expect(normalizeTags(',pasta,,dinner,')).toBe('Pasta, Dinner');
+  });
+
+  it('handles empty and null input', () => {
+    expect(normalizeTags('')).toBe('');
+    expect(normalizeTags(null)).toBe('');
+    expect(normalizeTags(undefined)).toBe('');
+  });
+
+  it('preserves a single well-formed tag unchanged (except casing)', () => {
+    expect(normalizeTags('weeknight')).toBe('Weeknight');
+  });
+
+  it('handles tags with ampersands and hyphens', () => {
+    expect(normalizeTags('fish & chips, kid-friendly')).toBe('Fish & Chips, Kid-friendly');
+  });
+
+  it('handles mixed mess from a real import', () => {
+    expect(normalizeTags('PASTA, pasta, Date Night,date night,quick'))
+      .toBe('Pasta, Date Night, Quick');
   });
 });
