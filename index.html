@@ -747,6 +747,16 @@ function promptForUpdate(worker) {
 async function registerServiceWorker() {
   if (!('serviceWorker' in navigator)) return;
 
+  // Escape hatch: append ?sw=off to unregister a broken worker.
+  if (new URLSearchParams(location.search).has('sw', 'off')) {
+    const regs = await navigator.serviceWorker.getRegistrations();
+    await Promise.all(regs.map(r => r.unregister()));
+    const keys = await caches.keys();
+    await Promise.all(keys.filter(k => k.startsWith('recipe-journal-')).map(k => caches.delete(k)));
+    showToast('Service worker unregistered. Reload without ?sw=off to re-enable.');
+    return;
+  }
+
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     if (!shouldReloadForUpdate || swReloaded) return;
     swReloaded = true;

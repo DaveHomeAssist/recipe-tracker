@@ -54,7 +54,9 @@ async function staleWhileRevalidate(request) {
 
 self.addEventListener('install', (event) => {
   event.waitUntil(warmAppShell());
-  self.skipWaiting();
+  // Do NOT call skipWaiting() here — let the user opt in via the
+  // "New version available — Refresh" toast. The message handler
+  // below calls skipWaiting() when the user clicks Refresh.
 });
 
 self.addEventListener('activate', (event) => {
