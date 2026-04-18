@@ -3,14 +3,30 @@ const JSON_HEADERS = {
   'Cache-Control': 'no-store',
 };
 
+// Parse a comma-separated ALLOWED_ORIGINS env var into a Set for O(1) lookup.
+// Accepts legacy singular ALLOWED_ORIGIN as a fallback. Empty = no CORS headers
+// ever emitted (same-origin deploy, or API accessed only from non-browser clients).
+export const parseAllowedOrigins = (raw) =>
+  new Set(
+    String(raw ?? '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
+  );
+
+export const isOriginAllowed = (origin, allowedOrigins) =>
+  !!origin && allowedOrigins.has(origin);
+
 export const applyCors = (req, res) => {
-  const allowedOrigin = process.env.ALLOWED_ORIGIN;
-  if (!allowedOrigin) return;
+  const allowedOrigins = parseAllowedOrigins(
+    process.env.ALLOWED_ORIGINS || process.env.ALLOWED_ORIGIN
+  );
+  if (!allowedOrigins.size) return;
 
   const origin = req.headers?.origin;
-  if (!origin || origin !== allowedOrigin) return;
+  if (!isOriginAllowed(origin, allowedOrigins)) return;
 
-  res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
+  res.setHeader('Access-Control-Allow-Origin', origin);
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PATCH,DELETE,OPTIONS');

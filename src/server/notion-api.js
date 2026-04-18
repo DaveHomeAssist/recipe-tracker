@@ -2,6 +2,17 @@ import { activeRecipesFilter, appIdFilter, notionPageToRecipe, recipeToNotionPro
 
 const API_BASE = 'https://api.notion.com/v1';
 
+// Multi-tenant revival pattern. Today this resolves to the single env-configured
+// data source; future multi-family deployments can swap in a journalId -> DB map
+// without changing every callsite. See NOTION_BACKEND_SPEC.md "Chosen Model".
+export const JOURNAL_PREFIX = 'journal_family';
+const resolveDataSourceId = (journalId = JOURNAL_PREFIX) => {
+  if (journalId !== JOURNAL_PREFIX) throw new Error(`Multi-journal not enabled (got ${journalId})`);
+  const id = process.env.NOTION_DATA_SOURCE_ID;
+  if (!id) throw new Error('Missing NOTION_DATA_SOURCE_ID');
+  return id;
+};
+
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const notionFetch = async (path, options = {}, attempt = 0) => {
@@ -40,8 +51,7 @@ const notionFetch = async (path, options = {}, attempt = 0) => {
 };
 
 export const queryAllRecipes = async () => {
-  const dataSourceId = process.env.NOTION_DATA_SOURCE_ID;
-  if (!dataSourceId) throw new Error('Missing NOTION_DATA_SOURCE_ID');
+  const dataSourceId = resolveDataSourceId();
 
   const recipes = [];
   let nextCursor;
@@ -64,7 +74,7 @@ export const queryAllRecipes = async () => {
 };
 
 export const findRecipeByAppId = async (id) => {
-  const dataSourceId = process.env.NOTION_DATA_SOURCE_ID;
+  const dataSourceId = resolveDataSourceId();
   const out = await notionFetch(`/data_sources/${dataSourceId}/query`, {
     method: 'POST',
     body: {
@@ -79,7 +89,7 @@ export const findRecipeByAppId = async (id) => {
 };
 
 export const createRecipePage = async (recipe) => {
-  const dataSourceId = process.env.NOTION_DATA_SOURCE_ID;
+  const dataSourceId = resolveDataSourceId();
   const out = await notionFetch('/pages', {
     method: 'POST',
     body: {

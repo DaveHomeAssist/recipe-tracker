@@ -11,6 +11,9 @@ This spec is for the current repo state:
 - current schema marker is `recipe_journal_schema_version = 4`
 - current import/export shape is `{ schemaVersion: 4, exportedAt, recipes }`
 
+This is the canonical shared-persistence spec for the repo. Delete older journal or
+Postgres variants rather than keeping competing backend plans in parallel.
+
 ## Recommendation
 
 Use Notion as the source of truth, but only behind a server-side API.
@@ -65,7 +68,14 @@ These Notion constraints drive the design:
 
 Single family, single workspace, single data source.
 
-No `journalId` abstraction in v1.
+No request-level `journalId` abstraction in v1.
+
+Keep one dormant server-side constant only:
+
+- `JOURNAL_PREFIX = 'journal_family'`
+
+That leaves a cheap re-entry point for future multi-family work without leaking
+tenant routing into the v1 API.
 
 One Notion data source holds all recipe pages. Each page represents one recipe.
 
@@ -102,6 +112,8 @@ Repo layout target:
 ```text
 index.html
 src/
+  server/
+    journal.js
 api/
   v1/
     session.js
@@ -760,7 +772,7 @@ Ship shared persistence for this repo as:
 - same-origin serverless API in front of Notion
 - access-code login exchanged for a secure session cookie
 - local snapshot cache for offline read only
-- no journal abstraction
+- no request-level journal abstraction beyond the dormant `JOURNAL_PREFIX`
 - no client-side Notion secrets
 - no seed fallback after cutover
 
