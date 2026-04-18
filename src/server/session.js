@@ -1,6 +1,10 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
-const DEFAULT_MAX_AGE = 60 * 60 * 24 * 30;
+// 24-hour session window (D4 spec). Shorter than typical web apps because
+// this is a tiny family deployment — the cost of re-entering the access
+// code once a day is trivial, and it caps the blast radius of a leaked
+// cookie. The session endpoint rotates the token on every successful auth.
+const DEFAULT_MAX_AGE = 60 * 60 * 24;
 
 const base64urlEncode = (value) => Buffer.from(value).toString('base64url');
 const base64urlDecode = (value) => Buffer.from(value, 'base64url').toString('utf8');

@@ -1,3 +1,4 @@
+import { timingSafeEqual } from 'node:crypto';
 import { handleCorsPreflight, methodNotAllowed, readJsonBody, sendError, sendJson, sendNoContent } from '../../src/server/http.js';
 import {
   createSessionToken,
@@ -5,6 +6,16 @@ import {
   serializeClearedSessionCookie,
   serializeSessionCookie,
 } from '../../src/server/session.js';
+
+// Constant-time comparison to prevent character-by-character brute force
+// via response-timing side channel. Inputs are padded to equal length so
+// timingSafeEqual doesn't throw on mismatched lengths.
+const safeEqual = (a, b) => {
+  const aBuf = Buffer.from(String(a || ''), 'utf8');
+  const bBuf = Buffer.from(String(b || ''), 'utf8');
+  if (aBuf.length !== bBuf.length) return false;
+  return timingSafeEqual(aBuf, bBuf);
+};
 
 export default async function handler(req, res) {
   if (handleCorsPreflight(req, res)) return;
@@ -25,7 +36,7 @@ export default async function handler(req, res) {
       sendError(req, res, 500, 'INTERNAL_ERROR', 'Server auth is not configured');
       return;
     }
-    if (body.accessCode !== process.env.FAMILY_ACCESS_CODE) {
+    if (!safeEqual(body.accessCode, process.env.FAMILY_ACCESS_CODE)) {
       sendError(req, res, 401, 'INVALID_ACCESS_CODE', 'That access code was not accepted');
       return;
     }

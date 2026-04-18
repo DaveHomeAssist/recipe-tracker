@@ -1,13 +1,15 @@
 import { activeRecipesFilter, appIdFilter, notionPageToRecipe, recipeToNotionProperties } from './notion-mapper.js';
+import { DEFAULT_JOURNAL_ID, JOURNAL_PREFIX } from './journal.js';
 
 const API_BASE = 'https://api.notion.com/v1';
 
 // Multi-tenant revival pattern. Today this resolves to the single env-configured
-// data source; future multi-family deployments can swap in a journalId -> DB map
+// data source; future multi-family deployments swap in a journalId -> DB map
 // without changing every callsite. See NOTION_BACKEND_SPEC.md "Chosen Model".
-export const JOURNAL_PREFIX = 'journal_family';
-const resolveDataSourceId = (journalId = JOURNAL_PREFIX) => {
-  if (journalId !== JOURNAL_PREFIX) throw new Error(`Multi-journal not enabled (got ${journalId})`);
+const resolveDataSourceId = (journalId = DEFAULT_JOURNAL_ID) => {
+  if (!String(journalId).startsWith(JOURNAL_PREFIX)) {
+    throw new Error(`Multi-journal not enabled (got ${journalId})`);
+  }
   const id = process.env.NOTION_DATA_SOURCE_ID;
   if (!id) throw new Error('Missing NOTION_DATA_SOURCE_ID');
   return id;
