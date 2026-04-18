@@ -1,0 +1,46 @@
+import { handleCorsPreflight, methodNotAllowed, readJsonBody, sendError, sendJson, sendNoContent } from '../../src/server/http.js';
+import {
+  createSessionToken,
+  getSessionFromRequest,
+  serializeClearedSessionCookie,
+  serializeSessionCookie,
+} from '../../src/server/session.js';
+
+export default async function handler(req, res) {
+  if (handleCorsPreflight(req, res)) return;
+
+  if (req.method === 'GET') {
+    const session = getSessionFromRequest(req, process.env.SESSION_SECRET);
+    sendJson(req, res, 200, { authenticated: session.authenticated });
+    return;
+  }
+
+  if (req.method === 'POST') {
+    const body = await readJsonBody(req).catch(() => null);
+    if (!body?.accessCode) {
+      sendError(req, res, 400, 'VALIDATION_FAILED', 'Missing access code');
+      return;
+    }
+    if (!process.env.FAMILY_ACCESS_CODE || !process.env.SESSION_SECRET) {
+      sendError(req, res, 500, 'INTERNAL_ERROR', 'Server auth is not configured');
+      return;
+    }
+    if (body.accessCode !== process.env.FAMILY_ACCESS_CODE) {
+      sendError(req, res, 401, 'INVALID_ACCESS_CODE', 'That access code was not accepted');
+      return;
+    }
+
+    const token = createSessionToken(process.env.SESSION_SECRET);
+    res.setHeader('Set-Cookie', serializeSessionCookie(token));
+    sendNoContent(req, res, 204);
+    return;
+  }
+
+  if (req.method === 'DELETE') {
+    res.setHeader('Set-Cookie', serializeClearedSessionCookie());
+    sendNoContent(req, res, 204);
+    return;
+  }
+
+  methodNotAllowed(req, res, ['GET', 'POST', 'DELETE', 'OPTIONS']);
+}
