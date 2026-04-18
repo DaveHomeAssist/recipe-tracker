@@ -10,14 +10,15 @@ class ApiError extends Error {
 
 const trimTrailingSlash = (value) => String(value || '').replace(/\/+$/, '');
 
-export const createRecipeApi = ({ baseUrl = '/api/v1' } = {}) => {
+export const createRecipeApi = ({ baseUrl = '/api/v1', getSessionToken = () => null, onUnauthorized = () => {} } = {}) => {
   const root = trimTrailingSlash(baseUrl);
 
   const request = async (path, options = {}) => {
+    const token = getSessionToken();
     const response = await fetch(`${root}${path}`, {
-      credentials: 'include',
       headers: {
         'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...(options.headers || {}),
       },
       ...options,
@@ -27,6 +28,7 @@ export const createRecipeApi = ({ baseUrl = '/api/v1' } = {}) => {
 
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
+      if (response.status === 401) onUnauthorized();
       throw new ApiError(payload?.error?.message || `Request failed with ${response.status}`, {
         status: response.status,
         code: payload?.error?.code,

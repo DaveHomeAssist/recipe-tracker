@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseAllowedOrigins, isOriginAllowed, applyCors } from '../../src/server/http.js';
+import { parseAllowedOrigins, isOriginAllowed, applyCors, rejectDisallowedOrigin } from '../../src/server/http.js';
 
 describe('parseAllowedOrigins', () => {
   it('splits a comma-separated list and trims whitespace', () => {
@@ -64,7 +64,7 @@ describe('applyCors', () => {
     const res = makeRes();
     applyCors(req, res);
     expect(res.headers['Access-Control-Allow-Origin']).toBe('https://b.example.com');
-    expect(res.headers['Access-Control-Allow-Credentials']).toBe('true');
+    expect(res.headers['Access-Control-Allow-Headers']).toBe('Authorization, Content-Type');
     expect(res.headers['Vary']).toBe('Origin');
   });
 
@@ -93,5 +93,41 @@ describe('applyCors', () => {
     applyCors(req, res);
     expect(res.headers['Access-Control-Allow-Origin']).toBe('https://legacy.example.com');
     delete process.env.ALLOWED_ORIGIN;
+  });
+});
+
+describe('rejectDisallowedOrigin', () => {
+  const makeReq = (origin) => ({ method: 'GET', url: '/api/test', headers: origin ? { origin } : {} });
+  const makeRes = () => {
+    const headers = {};
+    return {
+      headers,
+      statusCode: 200,
+      body: '',
+      setHeader: (k, v) => { headers[k] = v; },
+      writeHead(statusCode, extraHeaders = {}) {
+        this.statusCode = statusCode;
+        Object.assign(headers, extraHeaders);
+      },
+      end(payload = '') {
+        this.body = String(payload || '');
+      },
+    };
+  };
+
+  it('returns false for same-origin or unset allowlist flows', () => {
+    delete process.env.ALLOWED_ORIGINS;
+    const req = makeReq('https://evil.example.com');
+    const res = makeRes();
+    expect(rejectDisallowedOrigin(req, res)).toBe(false);
+  });
+
+  it('returns 403 and structured error JSON for disallowed origins', () => {
+    process.env.ALLOWED_ORIGINS = 'https://a.example.com';
+    const req = makeReq('https://evil.example.com');
+    const res = makeRes();
+    expect(rejectDisallowedOrigin(req, res)).toBe(true);
+    expect(res.statusCode).toBe(403);
+    expect(JSON.parse(res.body).error.code).toBe('CORS_FORBIDDEN');
   });
 });

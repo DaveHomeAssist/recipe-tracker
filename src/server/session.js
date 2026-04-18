@@ -3,8 +3,9 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 // 24-hour session window (D4 spec). Shorter than typical web apps because
 // this is a tiny family deployment — the cost of re-entering the access
 // code once a day is trivial, and it caps the blast radius of a leaked
-// cookie. The session endpoint rotates the token on every successful auth.
+// token. The session endpoint rotates the token on every successful auth.
 const DEFAULT_MAX_AGE = 60 * 60 * 24;
+const DEFAULT_SCOPE = 'recipe_journal';
 
 const base64urlEncode = (value) => Buffer.from(value).toString('base64url');
 const base64urlDecode = (value) => Buffer.from(value, 'base64url').toString('utf8');
@@ -12,26 +13,23 @@ const base64urlDecode = (value) => Buffer.from(value, 'base64url').toString('utf
 const sign = (value, secret) =>
   createHmac('sha256', secret).update(value).digest('base64url');
 
-export const parseCookies = (header = '') =>
-  String(header)
-    .split(';')
-    .map((part) => part.trim())
-    .filter(Boolean)
-    .reduce((acc, part) => {
-      const idx = part.indexOf('=');
-      if (idx === -1) return acc;
-      acc[part.slice(0, idx)] = decodeURIComponent(part.slice(idx + 1));
-      return acc;
-    }, {});
-
-export const createSessionToken = (secret, now = Date.now(), maxAge = DEFAULT_MAX_AGE) => {
+export const createSessionToken = (
+  secret,
+  now = Date.now(),
+  maxAge = DEFAULT_MAX_AGE,
+  scope = DEFAULT_SCOPE
+) => {
   const payload = {
     familyAccess: true,
+    scope,
     exp: Math.floor(now / 1000) + maxAge,
     iat: Math.floor(now / 1000),
   };
   const encoded = base64urlEncode(JSON.stringify(payload));
-  return `${encoded}.${sign(encoded, secret)}`;
+  return {
+    token: `${encoded}.${sign(encoded, secret)}`,
+    payload,
+  };
 };
 
 export const verifySessionToken = (token, secret, now = Date.now()) => {
@@ -49,20 +47,30 @@ export const verifySessionToken = (token, secret, now = Date.now()) => {
     const payload = JSON.parse(base64urlDecode(encoded));
     if (!payload?.familyAccess || !payload?.exp) return null;
     if (payload.exp <= Math.floor(now / 1000)) return null;
+    if (payload.scope !== DEFAULT_SCOPE) return null;
     return payload;
   } catch {
     return null;
   }
 };
 
-export const serializeSessionCookie = (token, maxAge = DEFAULT_MAX_AGE) =>
-  `rt_session=${encodeURIComponent(token)}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}`;
+export const getBearerToken = (header = '') => {
+  const [scheme, token] = String(header || '').split(/\s+/, 2);
+  if (!scheme || !token) return null;
+  if (scheme.toLowerCase() !== 'bearer') return null;
+  return token.trim() || null;
+};
 
-export const serializeClearedSessionCookie = () =>
-  'rt_session=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0';
+export const sessionPayloadToResponse = (payload, token = null) => ({
+  authenticated: true,
+  scope: payload.scope || DEFAULT_SCOPE,
+  issuedAt: new Date(Number(payload.iat) * 1000).toISOString(),
+  expiresAt: new Date(Number(payload.exp) * 1000).toISOString(),
+  ...(token ? { token } : {}),
+});
 
 export const getSessionFromRequest = (req, secret, now = Date.now()) => {
-  const cookies = parseCookies(req.headers?.cookie || '');
-  const payload = verifySessionToken(cookies.rt_session, secret, now);
-  return payload ? { authenticated: true, payload } : { authenticated: false, payload: null };
+  const token = getBearerToken(req.headers?.authorization || req.headers?.Authorization || '');
+  const payload = verifySessionToken(token, secret, now);
+  return payload ? { authenticated: true, payload, token } : { authenticated: false, payload: null, token: null };
 };

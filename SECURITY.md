@@ -7,10 +7,10 @@ Written 2026-04-16 for the Phase D Notion backend. Scope: single-family deployme
 | Actor | Capability | Mitigation |
 |---|---|---|
 | Public internet | Read any client-bundled asset | No secrets in client bundle (D7 audit test). Access code gates all writes. |
-| Stolen session cookie | Full write access until expiry | 24-hour session window. HttpOnly + Secure + SameSite=Lax cookie. Access code required for a fresh session. |
+| Stolen session token | Full write access until expiry | 24-hour session window. Scoped bearer token stored in `localStorage`. Access code required for a fresh session. |
 | Malicious import file | Corrupt local data, attempt XSS | Schema validation at both client and server (`validateRecipe`/`validateImport`). `escapeHtml` on every `innerHTML` sink. `safeUrl` on every `href`/`src`. |
 | Leaked Notion PAT | Full read/write of the family journal | PAT lives only in serverless env vars. Build-time audit test (`tests/unit/pat-audit.test.js`) fails if the PAT pattern appears in any client-facing file. |
-| Origin spoofing via XSRF | Write through a victim's session | CORS allowlist reflects only explicit origins. `SameSite=Lax` on session cookie blocks cross-site POST. |
+| Cross-origin browser write | Third-party site tries to call the API from an untrusted origin | CORS allowlist reflects only explicit origins and rejects mismatches with `403 CORS_FORBIDDEN`. |
 | Timing side-channel on access code | Character-by-character brute force | Access code comparison uses `crypto.timingSafeEqual` (`api/v1/session.js`). Session HMAC signature uses the same. |
 | Notion rate limit (3 req/s per integration) | Degraded UX; write failures | Exponential backoff + Retry-After respect in `src/server/notion-api.js`. Max retries configurable via `RATE_LIMIT_RETRY_MAX`. |
 
@@ -23,12 +23,15 @@ Written 2026-04-16 for the Phase D Notion backend. Scope: single-family deployme
 
 ## Session token
 
-- **Storage:** HttpOnly, Secure, SameSite=Lax cookie named `rt_session`.
-- **Signed:** HMAC-SHA256 over a base64url-encoded JSON payload `{familyAccess, exp, iat}`. Secret is `SESSION_SECRET` env var.
-- **Lifetime:** 24 hours from issue. No silent renewal — the user re-enters the access code to get a fresh cookie.
-- **Rotation:** Every successful `POST /api/v1/session` issues a new token that replaces the cookie.
-- **Revocation:** `DELETE /api/v1/session` clears the cookie. There is no server-side denylist — if the `SESSION_SECRET` rotates, all existing cookies become invalid.
-- **Why HttpOnly cookies over localStorage:** Cookies can't be read by JS, so an XSS cannot exfiltrate the token. We considered localStorage (spec v2 D4) but chose HttpOnly for the stronger XSS posture, accepting the CSRF surface that `SameSite=Lax` mitigates.
+- **Storage:** `localStorage` key `recipe_journal_session`.
+- **Shape:** `{ token, expiresAt, issuedAt, scope }`.
+- **Transport:** `Authorization: Bearer <token>` on every authenticated API call.
+- **Signed:** HMAC-SHA256 over a base64url-encoded JSON payload `{familyAccess, scope, exp, iat}`. Secret is `SESSION_SECRET` env var.
+- **Scope:** `recipe_journal`.
+- **Lifetime:** 24 hours from issue. No silent renewal — the user re-enters the access code to get a fresh token.
+- **Rotation:** Every successful `POST /api/v1/session` issues a new token and overwrites the stored one.
+- **Revocation:** `DELETE /api/v1/session` is client-driven logout only. There is no server-side denylist — if the `SESSION_SECRET` rotates, all existing tokens become invalid.
+- **Tradeoff:** This token is intentionally JS-accessible because D4 chose `localStorage`, not cookies. If an XSS lands, the token can be exfiltrated. We accept that risk for this small family deployment and mitigate it with aggressive output escaping, URL sanitization, schema validation, a 24-hour expiry, and no client-side Notion secret.
 
 ## Access code
 
@@ -41,8 +44,10 @@ Written 2026-04-16 for the Phase D Notion backend. Scope: single-family deployme
 
 - `ALLOWED_ORIGINS` env var is a comma-separated list.
 - Server reflects the request's `Origin` header only if it exactly matches an entry.
-- `Access-Control-Allow-Credentials: true`, `Vary: Origin` always paired.
-- Never uses `*`. Empty allowlist → no CORS headers emitted at all (same-origin deploy path).
+- `Access-Control-Allow-Headers: Authorization, Content-Type`.
+- `Vary: Origin` always paired when CORS headers are emitted.
+- Never uses `*`. Empty allowlist → no CORS headers emitted and no cross-origin rejection logic runs (same-origin deploy path).
+- When an allowlist exists and the request `Origin` is not present in it, the API returns `403 CORS_FORBIDDEN`.
 - Legacy singular `ALLOWED_ORIGIN` is honored for backward compatibility.
 
 ## Input validation
@@ -52,8 +57,9 @@ Written 2026-04-16 for the Phase D Notion backend. Scope: single-family deployme
 
 ## Backup and rollback
 
-- **D9 (pending):** nightly cron exports the full Notion database to timestamped JSON in non-git storage (Vercel Blob / Cloudflare R2). Not a git branch — keeps the public repo codebase-only.
-- Must be live and verified restorable before any Phase M migration writes occur.
+- **D9 (implemented in repo):** `.github/workflows/backup.yml` runs `scripts/backup_notion.mjs` nightly and immediately verifies the exported payload via `scripts/verify_backup.mjs`.
+- Destination stays non-git storage (`BACKUP_DESTINATION=blob|s3`) so family data never lands in the public repo. `local` mode is only for smoke tests and artifact inspection.
+- This still must be provisioned in the real repo and verified against the chosen storage target before any Phase M migration writes occur.
 - **Rollback path** from `MIGRATION_ROLLBACK.md`: flip `APP_CONFIG.syncMode = 'local'`, redeploy. The local 187-recipe seed and any unsaved localStorage data resume.
 
 ## What we do NOT promise

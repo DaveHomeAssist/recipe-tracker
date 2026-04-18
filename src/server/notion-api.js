@@ -1,5 +1,6 @@
 import { activeRecipesFilter, appIdFilter, notionPageToRecipe, recipeToNotionProperties } from './notion-mapper.js';
 import { DEFAULT_JOURNAL_ID, JOURNAL_PREFIX } from './journal.js';
+import { log } from './logger.js';
 
 const API_BASE = 'https://api.notion.com/v1';
 
@@ -16,8 +17,13 @@ const resolveDataSourceId = (journalId = DEFAULT_JOURNAL_ID) => {
 };
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const retryAttempts = () => Number(process.env.RATE_LIMIT_RETRY_MAX || 3);
+const retryBaseMs = () =>
+  Number(process.env.RATE_LIMIT_BASE_DELAY_MS || process.env.RATE_LIMIT_RETRY_BASE_MS || 250);
+const retryDelayMs = (attempt, retryAfterSeconds = 0) =>
+  Math.max(Math.max(0, retryAfterSeconds) * 1000, retryBaseMs() * (2 ** attempt));
 
-const notionFetch = async (path, options = {}, attempt = 0) => {
+export const notionFetch = async (path, options = {}, attempt = 0) => {
   const token = process.env.NOTION_ACCESS_TOKEN;
   const version = process.env.NOTION_VERSION || '2022-06-28';
   if (!token) throw new Error('Missing NOTION_ACCESS_TOKEN');
@@ -33,10 +39,25 @@ const notionFetch = async (path, options = {}, attempt = 0) => {
     body: options.body ? JSON.stringify(options.body) : undefined,
   });
 
-  if (response.status === 429 && attempt < Number(process.env.RATE_LIMIT_RETRY_MAX || 3)) {
-    const retryAfter = Number(response.headers.get('Retry-After') || 1);
-    await sleep(retryAfter * 1000);
-    return notionFetch(path, options, attempt + 1);
+  if (response.status === 429) {
+    const retryAfter = Number(response.headers.get('Retry-After') || 0);
+    if (attempt < retryAttempts()) {
+      const delayMs = retryDelayMs(attempt, retryAfter);
+      log.warn('notion.rate_limited', {
+        path,
+        attempt: attempt + 1,
+        delayMs,
+        retryAfter,
+      });
+      await sleep(delayMs);
+      return notionFetch(path, options, attempt + 1);
+    }
+
+    const error = await response.json().catch(() => null);
+    const err = new Error(error?.message || 'Notion rate limit exceeded');
+    err.status = 429;
+    err.code = 'RATE_LIMITED';
+    throw err;
   }
 
   if (!response.ok) {
@@ -44,7 +65,7 @@ const notionFetch = async (path, options = {}, attempt = 0) => {
     const message = error?.message || `Notion request failed with ${response.status}`;
     const err = new Error(message);
     err.status = response.status;
-    err.code = error?.code || 'UPSTREAM_NOTION_ERROR';
+    err.code = response.status === 429 ? 'RATE_LIMITED' : (error?.code || 'UPSTREAM_NOTION_ERROR');
     throw err;
   }
 

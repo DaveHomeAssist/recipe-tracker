@@ -138,10 +138,11 @@ If frontend stays on GitHub Pages:
 - API origin: separate Vercel project or other host
 - server must return:
   - `Access-Control-Allow-Origin: https://davehomeassist.github.io`
-  - `Access-Control-Allow-Credentials: true` if using cookies
+  - `Access-Control-Allow-Headers: Authorization, Content-Type`
   - `Vary: Origin`
+  - `403 CORS_FORBIDDEN` for non-matching browser origins
 
-Do not use `*` for origin if credentials are enabled.
+Do not use `*` for origin.
 
 ## Authentication
 
@@ -149,25 +150,26 @@ Do not put any shared bearer token in the frontend.
 
 ### MVP auth model
 
-Use one family access code entered in the UI and exchanged for a signed session cookie.
+Use one family access code entered in the UI and exchanged for a scoped signed session token.
 
 Flow:
 
 1. user opens the app
-2. if no valid session cookie, show a simple access-code form
+2. if no valid local session token, show a simple access-code form
 3. client `POST`s the code to `/api/v1/session`
 4. server compares the code to a stored secret
-5. server sets an `HttpOnly`, `Secure`, `SameSite=Lax` session cookie
-6. subsequent API calls use the cookie automatically
+5. server returns `{ token, expiresAt, issuedAt, scope }`
+6. client stores that object in `localStorage` under `recipe_journal_session`
+7. subsequent API calls send `Authorization: Bearer <token>`
 
-This is intentionally simple, but materially safer than embedding a shared API token in the client.
+This is intentionally simple. The token is JS-readable because `localStorage` is JS-readable by definition. That XSS tradeoff is accepted and documented in `SECURITY.md` rather than hidden behind inaccurate `httpOnly` language.
 
 ### Session model
 
-- cookie name: `rt_session`
-- expiry: 30 days
-- cookie payload: signed session containing `family_access = true`
-- logout route clears the cookie
+- storage key: `recipe_journal_session`
+- expiry: 24 hours
+- token payload: signed session containing `family_access = true`, `scope = recipe_journal`
+- logout route clears the stored token on the client
 
 ## Notion Data Model
 
@@ -235,7 +237,7 @@ Long free-text fields in this app are still expected to fit comfortably within t
 
 All routes are under `/api/v1`.
 
-All write routes require a valid session cookie.
+All write routes require a valid bearer session token.
 
 All responses are JSON except `DELETE`, which returns `204`.
 
@@ -251,9 +253,17 @@ Request:
 }
 ```
 
-Response `204`:
+Response `200`:
 
-- sets `Set-Cookie: rt_session=...; HttpOnly; Secure; SameSite=Lax; Path=/`
+```json
+{
+  "authenticated": true,
+  "token": "<signed token>",
+  "scope": "recipe_journal",
+  "issuedAt": "2026-04-18T00:00:00.000Z",
+  "expiresAt": "2026-04-19T00:00:00.000Z"
+}
+```
 
 Errors:
 
@@ -261,7 +271,7 @@ Errors:
 
 ## `DELETE /api/v1/session`
 
-Clear the session cookie.
+Client logout acknowledgement. The client clears the stored token locally.
 
 Response `204`
 
@@ -494,7 +504,7 @@ Codes:
 - `FAMILY_ACCESS_CODE`
   - shared access code used at login
 - `SESSION_SECRET`
-  - signing secret for the session cookie
+  - signing secret for the bearer session token
 
 ## Optional server env vars
 
@@ -734,7 +744,7 @@ Do not block launch on webhook support.
 - Notion property mapper round-trips recipe objects
 - tag normalization
 - rich-text chunking
-- session cookie helpers
+- bearer session token helpers
 
 ## Integration
 
@@ -770,7 +780,7 @@ Ship shared persistence for this repo as:
 
 - single-family, single-data-source Notion backend
 - same-origin serverless API in front of Notion
-- access-code login exchanged for a secure session cookie
+- access-code login exchanged for a 24-hour scoped bearer token
 - local snapshot cache for offline read only
 - no request-level journal abstraction beyond the dormant `JOURNAL_PREFIX`
 - no client-side Notion secrets

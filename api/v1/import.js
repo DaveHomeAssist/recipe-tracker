@@ -1,9 +1,10 @@
-import { handleCorsPreflight, methodNotAllowed, readJsonBody, sendError, sendJson } from '../../src/server/http.js';
+import { handleCorsPreflight, methodNotAllowed, readJsonBody, rejectDisallowedOrigin, sendError, sendJson } from '../../src/server/http.js';
 import { requireSession } from '../../src/server/require-session.js';
 import { importRecipesToNotion } from '../../src/server/recipes-service.js';
 
 export default async function handler(req, res) {
   if (handleCorsPreflight(req, res)) return;
+  if (rejectDisallowedOrigin(req, res)) return;
   if (!requireSession(req, res)) return;
 
   if (req.method !== 'POST') {

@@ -13,23 +13,32 @@
 //   - retention + versioning are native to S3/R2/Blob
 
 import { writeFileSync, mkdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { queryAllRecipes } from '../src/server/notion-api.js';
+import { buildBackupPayload } from '../src/server/backup.js';
 import { log } from '../src/server/logger.js';
 
 const now = new Date();
 const stamp = now.toISOString().slice(0, 10); // YYYY-MM-DD
 const filename = `recipes-${stamp}.json`;
+const verificationCopyEnabled = ['1', 'true', 'yes'].includes(
+  String(process.env.BACKUP_VERIFY_LOCAL_COPY || '').toLowerCase()
+);
+const verificationCopyPath = process.env.BACKUP_VERIFY_LOCAL_PATH || './backups/latest.json';
+
+const writeVerificationCopy = (body) => {
+  if (!verificationCopyEnabled) return;
+  mkdirSync(dirname(verificationCopyPath), { recursive: true });
+  writeFileSync(verificationCopyPath, body + '\n', 'utf8');
+  log.info('backup.verification_copy', {
+    path: verificationCopyPath,
+    bytes: body.length,
+  });
+};
 
 const main = async () => {
   const recipes = await queryAllRecipes();
-  const payload = {
-    schemaVersion: 4,
-    exportedAt: now.toISOString(),
-    source: 'notion-backup',
-    count: recipes.length,
-    recipes,
-  };
+  const payload = buildBackupPayload(recipes, now);
   const body = JSON.stringify(payload, null, 2);
 
   const destination = (process.env.BACKUP_DESTINATION || 'local').toLowerCase();
@@ -40,6 +49,7 @@ const main = async () => {
       const path = join(dir, filename);
       writeFileSync(path, body + '\n', 'utf8');
       log.info('backup.wrote', { destination, path, count: recipes.length, bytes: body.length });
+      writeVerificationCopy(body);
       return;
     }
     case 's3': {
@@ -60,6 +70,7 @@ const main = async () => {
         ContentType: 'application/json; charset=utf-8',
       }));
       log.info('backup.wrote', { destination, bucket, key, count: recipes.length, bytes: body.length });
+      writeVerificationCopy(body);
       return;
     }
     case 'blob': {
@@ -73,6 +84,7 @@ const main = async () => {
         token,
       });
       log.info('backup.wrote', { destination, url: blob.url, count: recipes.length, bytes: body.length });
+      writeVerificationCopy(body);
       return;
     }
     default:

@@ -1,9 +1,11 @@
 import { loadRemoteRecipeCache, saveRemoteRecipeCache } from './recipe-cache.js';
+import { clearStoredSession } from './session-storage.js';
 
 export const bootstrapRemoteRecipes = async ({ api }) => {
   const cached = loadRemoteRecipeCache();
   const session = await api.getSession();
   if (!session?.authenticated) {
+    clearStoredSession();
     return {
       recipes: cached.recipes,
       tagRegistry: cached.tagRegistry,

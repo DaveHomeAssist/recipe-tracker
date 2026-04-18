@@ -551,6 +551,8 @@ import { filtered as filteredRecipes, renderGridHtml, statsFor, stars } from './
 import { validateImport } from './src/recipe-schema.js';
 import { mergeSeedImages } from './src/seed-images.js';
 import { createRecipeApi } from './src/recipe-api.js';
+import { installGlobalErrorReporting } from './src/client-error-reporting.js';
+import { clearStoredSession, getStoredSessionToken } from './src/session-storage.js';
 import { submitAccessCode } from './src/auth.js';
 import { loadRemoteRecipeCache, saveRemoteRecipeCache } from './src/recipe-cache.js';
 import { bootstrapRemoteRecipes, deleteRemoteRecipe, importRemoteRecipes, saveRemoteRecipe } from './src/recipe-store.js';
@@ -576,7 +578,13 @@ const APP_CONFIG = Object.freeze({
   ...(globalThis.RECIPE_TRACKER_CONFIG || {}),
 });
 const REMOTE_MODE = APP_CONFIG.syncMode === 'remote';
-const remoteApi = REMOTE_MODE ? createRecipeApi({ baseUrl: APP_CONFIG.apiBaseUrl || '/api/v1' }) : null;
+const remoteApi = REMOTE_MODE
+  ? createRecipeApi({
+      baseUrl: APP_CONFIG.apiBaseUrl || '/api/v1',
+      getSessionToken: getStoredSessionToken,
+      onUnauthorized: clearStoredSession,
+    })
+  : null;
 let prefs = loadPrefs();
 
 const cloneFilters = (value = DEFAULT_FILTERS) => ({
@@ -1472,6 +1480,13 @@ function openAuthModal(message = 'Enter the family access code to load the share
   openModal('authModal');
 }
 
+function handleRemoteAuthFailure(error, message = 'Session expired. Re-enter the family access code to continue.') {
+  if (error?.code !== 'UNAUTHORIZED') return false;
+  clearStoredSession();
+  openAuthModal(message);
+  return true;
+}
+
 async function syncRemoteRecipes({ allowPrompt = true } = {}) {
   if (!REMOTE_MODE) return;
 
@@ -1493,6 +1508,10 @@ async function syncRemoteRecipes({ allowPrompt = true } = {}) {
     }
   } catch (error) {
     console.error('remote bootstrap failed:', error);
+    if (handleRemoteAuthFailure(error, 'Session expired. Re-enter the family access code to load shared recipes.')) {
+      render();
+      return;
+    }
     const cached = loadRemoteRecipeCache();
     const hydrated = hydrateRecipeState(cached.recipes, cached.tagRegistry);
     recipes = hydrated.recipes;
@@ -1697,6 +1716,7 @@ function importRecipes(file) {
       }
     } catch (e) {
       console.error('import failed:', e);
+      handleRemoteAuthFailure(e, 'Session expired. Re-enter the family access code before importing.');
       showToast(`⚠️ Import failed: ${e.message || 'invalid file'}`, 'error');
     }
   };
@@ -1846,6 +1866,7 @@ document.getElementById('saveFormBtn').addEventListener('click', async ()=>{
       persist();
     } catch (error) {
       console.error('remote save failed:', error);
+      handleRemoteAuthFailure(error, 'Session expired. Re-enter the family access code before saving.');
       showToast(`⚠️ Save failed: ${error.message || 'server error'}`, 'error');
       return;
     }
@@ -2110,6 +2131,7 @@ function del(id) {
       })
       .catch((error) => {
         console.error('remote delete failed:', error);
+        handleRemoteAuthFailure(error, 'Session expired. Re-enter the family access code before deleting.');
         showToast(`⚠️ Delete failed: ${error.message || 'server error'}`, 'error');
       });
     return;
@@ -2258,6 +2280,16 @@ function showMultiActionToast(msg, actions, timeout = 12000) {
   t.classList.add('show');
   resetToastTimer(timeout);
 }
+
+installGlobalErrorReporting({
+  endpoint: `${APP_CONFIG.apiBaseUrl || '/api/v1'}/log/client-error`,
+  onToast: (message) => showToast(message, 'error'),
+  getContext: () => ({
+    syncMode: APP_CONFIG.syncMode,
+    remoteMode: REMOTE_MODE,
+    recipeCount: Array.isArray(recipes) ? recipes.length : 0,
+  }),
+});
 
 // Undo toast: shown on delete, 6s to change your mind.
 function showUndoToast(msg, onUndo) {

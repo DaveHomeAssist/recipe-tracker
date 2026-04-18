@@ -4,6 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "backup:notion": "node scripts/backup_notion.mjs",
+    "backup:verify": "node scripts/verify_backup.mjs",
     "test:unit": "vitest run tests/unit",
     "test:integration": "vitest run tests/integration",
     "test:e2e": "playwright test",

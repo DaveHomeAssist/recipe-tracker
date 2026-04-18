@@ -3,7 +3,7 @@
 // limit beyond the CORS allowlist. Phase R monitoring reads these off
 // the platform's log tail.
 
-import { handleCorsPreflight, methodNotAllowed, readJsonBody, sendNoContent } from '../../../src/server/http.js';
+import { handleCorsPreflight, methodNotAllowed, readJsonBody, rejectDisallowedOrigin, sendNoContent } from '../../../src/server/http.js';
 import { log, requestIdFor } from '../../../src/server/logger.js';
 
 const MAX_MESSAGE_LEN = 2000;
@@ -13,6 +13,7 @@ const truncate = (value, max) =>
 
 export default async function handler(req, res) {
   if (handleCorsPreflight(req, res)) return;
+  if (rejectDisallowedOrigin(req, res)) return;
   if (req.method !== 'POST') {
     methodNotAllowed(req, res, ['POST', 'OPTIONS']);
     return;

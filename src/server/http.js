@@ -27,15 +27,28 @@ export const applyCors = (req, res) => {
   if (!isOriginAllowed(origin, allowedOrigins)) return;
 
   res.setHeader('Access-Control-Allow-Origin', origin);
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PATCH,DELETE,OPTIONS');
   res.setHeader('Vary', 'Origin');
 };
 
+export const rejectDisallowedOrigin = (req, res) => {
+  const allowedOrigins = parseAllowedOrigins(
+    process.env.ALLOWED_ORIGINS || process.env.ALLOWED_ORIGIN
+  );
+  if (!allowedOrigins.size) return false;
+
+  const origin = req.headers?.origin;
+  if (!origin || isOriginAllowed(origin, allowedOrigins)) return false;
+
+  sendError(req, res, 403, 'CORS_FORBIDDEN', 'Origin is not allowed');
+  return true;
+};
+
 export const handleCorsPreflight = (req, res) => {
-  applyCors(req, res);
   if (req.method !== 'OPTIONS') return false;
+  if (rejectDisallowedOrigin(req, res)) return true;
+  applyCors(req, res);
   res.statusCode = 204;
   res.end();
   return true;

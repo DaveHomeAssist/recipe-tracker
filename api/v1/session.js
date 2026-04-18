@@ -1,10 +1,9 @@
 import { timingSafeEqual } from 'node:crypto';
-import { handleCorsPreflight, methodNotAllowed, readJsonBody, sendError, sendJson, sendNoContent } from '../../src/server/http.js';
+import { handleCorsPreflight, methodNotAllowed, readJsonBody, rejectDisallowedOrigin, sendError, sendJson, sendNoContent } from '../../src/server/http.js';
 import {
   createSessionToken,
   getSessionFromRequest,
-  serializeClearedSessionCookie,
-  serializeSessionCookie,
+  sessionPayloadToResponse,
 } from '../../src/server/session.js';
 
 // Constant-time comparison to prevent character-by-character brute force
@@ -19,10 +18,16 @@ const safeEqual = (a, b) => {
 
 export default async function handler(req, res) {
   if (handleCorsPreflight(req, res)) return;
+  if (rejectDisallowedOrigin(req, res)) return;
 
   if (req.method === 'GET') {
     const session = getSessionFromRequest(req, process.env.SESSION_SECRET);
-    sendJson(req, res, 200, { authenticated: session.authenticated });
+    sendJson(
+      req,
+      res,
+      200,
+      session.authenticated ? sessionPayloadToResponse(session.payload) : { authenticated: false }
+    );
     return;
   }
 
@@ -41,14 +46,12 @@ export default async function handler(req, res) {
       return;
     }
 
-    const token = createSessionToken(process.env.SESSION_SECRET);
-    res.setHeader('Set-Cookie', serializeSessionCookie(token));
-    sendNoContent(req, res, 204);
+    const { token, payload } = createSessionToken(process.env.SESSION_SECRET);
+    sendJson(req, res, 200, sessionPayloadToResponse(payload, token));
     return;
   }
 
   if (req.method === 'DELETE') {
-    res.setHeader('Set-Cookie', serializeClearedSessionCookie());
     sendNoContent(req, res, 204);
     return;
   }
