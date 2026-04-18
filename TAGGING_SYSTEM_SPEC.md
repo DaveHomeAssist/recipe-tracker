@@ -425,7 +425,7 @@ These need a product call before implementation starts:
 
 ## Implementation split: MVP now / Full domain later
 
-This spec describes the end-state design. It is explicitly **deferred architecture** — the full catalog, `tagIds`, combobox, and management UI should not be built until a shared backend exists (see `SHARED_PERSISTENCE_SPEC.md`). Building a client-only tag catalog in localStorage and then migrating it to Postgres is double work.
+This spec describes the end-state design. It is explicitly **deferred architecture** — the full catalog, `tagIds`, combobox, and management UI should not be built until a shared backend exists (see `NOTION_BACKEND_SPEC.md`). Building a client-only tag catalog in localStorage and then migrating it to a server-backed source of truth is double work.
 
 ### MVP (implement now, no schema bump needed)
 

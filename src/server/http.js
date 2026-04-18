@@ -60,6 +60,22 @@ export const sendError = (req, res, statusCode, code, message, details = []) => 
     globalThis.crypto?.randomUUID?.() ||
     `req-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
+  // Structured log for Phase R monitoring. 5xx goes to stderr (via log.error),
+  // 4xx to stdout as a warning. 401s are expected traffic and get info level.
+  const level = statusCode >= 500 ? 'error' : statusCode === 401 ? 'info' : 'warn';
+  // Lazy import to avoid pulling logger into environments that don't want it
+  // (e.g. test mocks that stub sendJson directly).
+  import('./logger.js').then(({ log }) => {
+    log[level]('http.error', {
+      requestId,
+      route: req.url,
+      method: req.method,
+      status: statusCode,
+      code,
+      message,
+    });
+  }).catch(() => {});
+
   sendJson(req, res, statusCode, {
     error: { code, message, details, requestId },
   });
