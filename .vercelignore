@@ -1,0 +1,12 @@
+.claude/
+.env 2.example
+NOTION_BACKEND_SPEC 2.md
+scripts/import_export_to_notion 2.mjs
+src/server/http 2.js
+src/server/notion-api 2.js
+src/server/notion-mapper 2.js
+src/server/recipes-service 2.js
+src/server/require-session 2.js
+src/server/session 2.js
+tests/unit/notion-mapper.test 2.js
+tests/unit/session.test 2.js

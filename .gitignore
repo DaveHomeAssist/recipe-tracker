@@ -8,3 +8,4 @@ package-lock.json
 playwright-report/
 test-results/
 tests/e2e/.last-run.json
+.vercel
