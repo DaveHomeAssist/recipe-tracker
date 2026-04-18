@@ -7,7 +7,7 @@
 // recipe cannot execute JS. This validator exists to stop obviously
 // broken or oversized imports from silently corrupting local state.
 
-import { safeUrl, normalizeTags } from './recipe-lib.js';
+import { safeUrl, splitTagLabels } from './recipe-lib.js';
 
 const MAX_FIELD_LEN = 100_000; // 100 KB per text field — forgiving but bounded
 const MAX_RECIPES = 10_000;    // reject imports that would blow up the grid
@@ -50,7 +50,7 @@ export const validateRecipe = (raw) => {
     preptime: toStr(raw.preptime).trim(),
     cooktime: toStr(raw.cooktime).trim(),
     servings: toStr(raw.servings).trim(),
-    tags: normalizeTags(raw.tags),
+    tags: splitTagLabels(raw.tags),
     notes: toStr(raw.notes),
     url: safeUrl(raw.url),
     image: safeUrl(raw.image),

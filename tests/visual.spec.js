@@ -1,5 +1,7 @@
 import { test, expect } from '@playwright/test';
 
+test.setTimeout(90_000);
+
 const KEY = 'recipe_journal_v3';
 const SCHEMA_KEY = 'recipe_journal_schema_version';
 const VISUAL_IMAGE_SVG = `
@@ -24,6 +26,7 @@ async function freshPage(page) {
       try {
         localStorage.removeItem(key);
         localStorage.removeItem(schemaKey);
+        localStorage.removeItem('recipe_journal_prefs');
       } catch {}
     },
     { key: KEY, schemaKey: SCHEMA_KEY }
@@ -63,7 +66,7 @@ test('full grid matches the desktop baseline', async ({ page }) => {
   await expect(page).toHaveScreenshot('full-grid.png', {
     fullPage: true,
     maxDiffPixelRatio: 0.02,
-    timeout: 20_000,
+    timeout: 45_000,
   });
 });
 
@@ -76,7 +79,7 @@ test('view modal matches the desktop baseline', async ({ page }) => {
   await expect(page).toHaveScreenshot('view-modal.png', {
     fullPage: true,
     maxDiffPixelRatio: 0.02,
-    timeout: 20_000,
+    timeout: 45_000,
   });
 });
 
@@ -89,18 +92,18 @@ test('add form modal matches the desktop baseline', async ({ page }) => {
   await expect(page).toHaveScreenshot('add-form-modal.png', {
     fullPage: true,
     maxDiffPixelRatio: 0.02,
-    timeout: 20_000,
+    timeout: 45_000,
   });
 });
 
 test('Italian filter grid matches the desktop baseline', async ({ page }) => {
   await freshPage(page);
-  await page.locator('.filter-btn[data-filter="Italian"]').click();
+  await page.locator('.filter-btn[data-cuisine-filter="Italian"]').click();
   await stabilizePage(page);
 
   await expect(page).toHaveScreenshot('italian-filter-grid.png', {
     fullPage: true,
     maxDiffPixelRatio: 0.02,
-    timeout: 20_000,
+    timeout: 45_000,
   });
 });

@@ -7,7 +7,8 @@
     "test:unit": "vitest run tests/unit",
     "test:integration": "vitest run tests/integration",
     "test:e2e": "playwright test",
-    "serve": "python3 scripts/static_server.py"
+    "serve": "python3 scripts/static_server.py",
+    "migrate:notion": "node scripts/import_export_to_notion.mjs"
   },
   "devDependencies": {
     "vitest": "^2.1.9",

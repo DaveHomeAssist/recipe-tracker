@@ -16,6 +16,7 @@ async function freshPage(page) {
     try {
       localStorage.removeItem('recipe_journal_v3');
       localStorage.removeItem('recipe_journal_schema_version');
+      localStorage.removeItem('recipe_journal_prefs');
     } catch {}
   });
   await page.goto('/index.html');
@@ -48,7 +49,7 @@ test('cuisine filter narrows the grid', async ({ page }) => {
   const totalBefore = await page.locator('.recipe-grid .card').count();
   expect(totalBefore).toBe(187);
 
-  await page.locator('.filter-btn[data-filter="Italian"]').click();
+  await page.locator('.filter-btn[data-cuisine-filter="Italian"]').click();
   const italianCount = await page.locator('.recipe-grid .card').count();
   expect(italianCount).toBeGreaterThan(0);
   expect(italianCount).toBeLessThan(187);
@@ -67,6 +68,43 @@ test('search narrows the grid and is case-insensitive', async ({ page }) => {
   await page.locator('#searchInput').fill('CHICKEN');
   // Give the input handler a tick.
   await page.waitForTimeout(150);
+
+  const count = await page.locator('.recipe-grid .card').count();
+  expect(count).toBeGreaterThan(0);
+  expect(count).toBeLessThan(187);
+});
+
+test('last cuisine filter persists across reload', async ({ page }) => {
+  await freshPage(page);
+  await page.locator('.recipe-grid .card').first().waitFor();
+
+  await page.locator('.filter-btn[data-cuisine-filter="Italian"]').click();
+  await expect(page.locator('.filter-btn[data-cuisine-filter="Italian"]')).toHaveClass(/active/);
+
+  await page.reload();
+  await page.locator('.recipe-grid .card').first().waitFor();
+  await expect(page.locator('.filter-btn[data-cuisine-filter="Italian"]')).toHaveClass(/active/);
+
+  const cuisineTexts = await page.locator('.recipe-grid .card .card-cuisine').allTextContents();
+  expect(cuisineTexts.every((t) => t.trim() === 'Italian')).toBe(true);
+});
+
+test('recent searches are suggested and can be replayed', async ({ page }) => {
+  await freshPage(page);
+  await page.locator('.recipe-grid .card').first().waitFor();
+
+  const search = page.locator('#searchInput');
+  await search.fill('chicken');
+  await page.waitForTimeout(650);
+  await search.blur();
+  await page.waitForTimeout(150);
+  await search.fill('');
+  await search.focus();
+
+  const recentChip = page.locator('#recentSearches [data-search="chicken"]');
+  await expect(recentChip).toBeVisible();
+  await recentChip.click();
+  await expect(search).toHaveValue('chicken');
 
   const count = await page.locator('.recipe-grid .card').count();
   expect(count).toBeGreaterThan(0);
@@ -124,6 +162,178 @@ test('adding a manual recipe persists across reload', async ({ page }) => {
     uniqueName,
     { timeout: 5000 }
   );
+});
+
+test('add form pre-fills cuisine, suggestions, and rating defaults from usage', async ({ page }) => {
+  await freshPage(page);
+  await page.locator('.recipe-grid .card').first().waitFor();
+  const expectedCuisine = await page.evaluate(() => {
+    const stored = JSON.parse(localStorage.getItem('recipe_journal_v3') || '[]');
+    const recipes = Array.isArray(stored) ? stored : stored.recipes || [];
+    const counts = recipes.reduce((acc, recipe) => {
+      const cuisine = String(recipe?.cuisine || '').trim() || 'Other';
+      acc[cuisine] = (acc[cuisine] || 0) + 1;
+      return acc;
+    }, {});
+    return Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] || 'Other';
+  });
+
+  await page.locator('#openAddBtn').click();
+  await expect(page.locator('#f-cuisine')).toHaveValue(expectedCuisine);
+  await expect(page.locator('#location-suggestions')).toBeAttached();
+  expect(await page.locator('#source-suggestions option').count()).toBeGreaterThan(0);
+  await page.locator('#f-tag-input').fill('sou');
+  await page.waitForTimeout(250);
+  expect(await page.locator('#tag-suggestions .tag-dropdown-item').count()).toBeGreaterThan(0);
+
+  await page.locator('#f-name').fill(`Rated Recipe ${Date.now()}`);
+  await page.locator('#fStars .star-option[data-v="5"]').click();
+  await page.locator('#saveFormBtn').click();
+  await expect(page.locator('#formModal')).not.toHaveClass(/open/);
+
+  await page.locator('#openAddBtn').click();
+  await expect(page.locator('#fStars .star-option.active')).toHaveCount(5);
+});
+
+test('closing the view modal restores the prior scroll position', async ({ page }) => {
+  await freshPage(page);
+  await page.locator('.recipe-grid .card').nth(30).scrollIntoViewIfNeeded();
+  const beforeOpen = await page.evaluate(() => window.scrollY);
+
+  await page.locator('.recipe-grid .card').nth(30).click();
+  await expect(page.locator('#viewModal')).toHaveClass(/open/);
+  await page.locator('#closeViewBtn').click();
+  await expect(page.locator('#viewModal')).not.toHaveClass(/open/);
+  await page.waitForTimeout(120);
+
+  const afterClose = await page.evaluate(() => window.scrollY);
+  expect(Math.abs(afterClose - beforeOpen)).toBeLessThan(5);
+});
+
+test('backup nudge appears after ten local edits', async ({ page }) => {
+  await freshPage(page);
+  await page.evaluate(() => {
+    localStorage.setItem(
+      'recipe_journal_prefs',
+      JSON.stringify({
+        recentSearches: [],
+        lastFilter: 'all',
+        defaultRating: 0,
+        editsSinceLastExport: 10,
+        lastNudgeDismissedAt: 0,
+        recentlyViewed: [],
+        recentManualRatings: [],
+        v: 1,
+      })
+    );
+  });
+
+  await page.reload();
+  await page.locator('.recipe-grid .card').first().waitFor();
+  await expect(page.locator('#toast')).toContainText('10 changes since your last backup.');
+  await expect(page.locator('#toast button')).toHaveCount(2);
+});
+
+test('card tags add an active filter', async ({ page }) => {
+  await freshPage(page);
+  const firstCardTag = page.locator('.recipe-grid [data-card-tag]').first();
+  await expect(firstCardTag).toBeVisible();
+  const activeSlug = await firstCardTag.getAttribute('data-card-tag');
+  expect(activeSlug).toBeTruthy();
+
+  await firstCardTag.click();
+  await expect(page.locator(`#activeFilters [data-clear-tag="${activeSlug}"]`)).toBeVisible();
+});
+
+test('editing preserves cuisines outside the default select list', async ({ page }) => {
+  await page.goto('/index.html');
+  await page.evaluate(() => {
+    localStorage.setItem('recipe_journal_v3', JSON.stringify({
+      recipes: [{
+        id: 'custom-british',
+        name: 'Sunday Roast',
+        cuisine: 'British',
+        source: '',
+        location: '',
+        ingredients: '',
+        instructions: '',
+        preptime: '',
+        cooktime: '',
+        servings: '',
+        tags: ['comfort-food'],
+        notes: '',
+        url: '',
+        date: '',
+        rating: 0,
+      }],
+      tagRegistry: {
+        'comfort-food': {
+          slug: 'comfort-food',
+          label: 'Comfort Food',
+          color: '#c9a84c',
+          colorIndex: 0,
+          pinned: false,
+          createdAt: '2026-04-17T00:00:00.000Z',
+          updatedAt: '2026-04-17T00:00:00.000Z',
+        },
+      },
+    }));
+    localStorage.removeItem('recipe_journal_schema_version');
+  });
+  await page.reload();
+
+  await expect(page.locator('.recipe-grid .card')).toHaveCount(1);
+  await page.locator('.recipe-grid .card').first().click();
+  await page.locator('#editViewBtn').click();
+  await expect(page.locator('#f-cuisine')).toHaveValue('British');
+  await page.locator('#saveFormBtn').click();
+  await expect(page.locator('#formModal')).not.toHaveClass(/open/);
+
+  await page.reload();
+  await expect(page.locator('.recipe-grid .card .card-cuisine')).toHaveText('British');
+  const storedCuisine = await page.evaluate(() => {
+    const stored = JSON.parse(localStorage.getItem('recipe_journal_v3') || '{}');
+    return stored?.recipes?.[0]?.cuisine || '';
+  });
+  expect(storedCuisine).toBe('British');
+});
+
+test('renaming an active tag keeps the active filter in sync', async ({ page }) => {
+  await freshPage(page);
+  const firstCardTag = page.locator('.recipe-grid [data-card-tag]').first();
+  await expect(firstCardTag).toBeVisible();
+  const activeSlug = await firstCardTag.getAttribute('data-card-tag');
+  const currentLabel = (await firstCardTag.textContent())?.trim() || 'Tag';
+  const nextLabel = `${currentLabel} Renamed`;
+  const nextSlug = nextLabel.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+
+  await firstCardTag.click();
+  await expect(page.locator(`#activeFilters [data-clear-tag="${activeSlug}"]`)).toBeVisible();
+
+  await page.locator('#openTagManagerBtn').click();
+  await page.locator(`[data-edit-label="${activeSlug}"]`).click();
+  const input = page.locator(`[data-tag-rename-input="${activeSlug}"]`);
+  await input.fill(nextLabel);
+  await input.press('Enter');
+
+  await expect(page.locator(`#activeFilters [data-clear-tag="${nextSlug}"]`)).toBeVisible();
+  await expect(page.locator(`#activeFilters [data-clear-tag="${activeSlug}"]`)).toHaveCount(0);
+});
+
+test('escaping inline tag rename does not close the tag manager modal', async ({ page }) => {
+  await freshPage(page);
+  await page.locator('#openTagManagerBtn').click();
+  const firstLabel = page.locator('[data-edit-label]').first();
+  const slug = await firstLabel.getAttribute('data-edit-label');
+  expect(slug).toBeTruthy();
+
+  await firstLabel.click();
+  const input = page.locator(`[data-tag-rename-input="${slug}"]`);
+  await expect(input).toBeVisible();
+  await input.press('Escape');
+
+  await expect(page.locator('#tagManagerModal')).toHaveClass(/open/);
+  await expect(input).toHaveCount(0);
 });
 
 test('no console errors or uncaught exceptions on load', async ({ page }) => {

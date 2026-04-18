@@ -4,6 +4,7 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { filtered, renderCardHtml, renderGridHtml, statsFor } from '../../src/recipe-render.js';
+import { TAG_COLOR_PALETTE, resolveTagColor } from '../../src/recipe-lib.js';
 
 // Sanity fixture used across tests
 const sampleRecipes = [
@@ -95,7 +96,7 @@ describe('renderGridHtml — XSS safety', () => {
     expect(alerts).toBe(0);
     // And the tag attribute-injection attempt ends up inside text, not as an attribute.
     const tagSpan = host.querySelector('.tag');
-    expect(tagSpan?.textContent).toContain('onmouseover');
+    expect(tagSpan?.textContent?.toLowerCase()).toContain('onmouseover');
 
     document.body.removeChild(host);
     window.alert = originalAlert;
@@ -107,6 +108,42 @@ describe('renderGridHtml — XSS safety', () => {
     ]);
     expect(html).not.toMatch(/data-id="[^"]*"[^>]*>\s*<script/);
     expect(html).toContain('&quot;&gt;&lt;script&gt;');
+  });
+
+  it('renders card tag buttons with registry labels and accent colors', () => {
+    const html = renderCardHtml(
+      { id: 1, name: 'Tagged', cuisine: 'Other', tags: ['weeknight-win'], url: '' },
+      {
+        tagRegistry: {
+          'weeknight-win': {
+            slug: 'weeknight-win',
+            label: 'Weeknight Win',
+            color: TAG_COLOR_PALETTE[0],
+          },
+        },
+      }
+    );
+
+    expect(html).toContain('data-card-tag="weeknight-win"');
+    expect(html).toContain('Weeknight Win');
+    expect(html).toContain(`--tag-accent:${TAG_COLOR_PALETTE[0]}`);
+  });
+
+  it('renders every normalized tag on a card instead of truncating after three', () => {
+    const html = renderCardHtml({
+      id: 3,
+      name: 'Many Tags',
+      cuisine: 'Other',
+      tags: ['one', 'two', 'three', 'four'],
+      url: '',
+    });
+
+    expect(html.match(/data-card-tag=/g)).toHaveLength(4);
+  });
+
+  it('uses the registry color index when a tag is set back to automatic color', () => {
+    expect(resolveTagColor({ color: null, colorIndex: 7 }, 0)).toBe(TAG_COLOR_PALETTE[7]);
+    expect(resolveTagColor({ colorIndex: 3 }, 0)).toBe(TAG_COLOR_PALETTE[3]);
   });
 });
 
@@ -147,6 +184,13 @@ describe('filtered — filter + search combinations', () => {
 
   it('search matches tags', () => {
     expect(filtered(sampleRecipes, { filter: 'all', search: 'brunch' })).toHaveLength(1);
+  });
+
+  it('requires all selected tag filters to match', () => {
+    const out = filtered(sampleRecipes, { filters: { cuisine: null, tags: ['fish', 'umami'], rating: 0, search: '' } });
+    expect(out).toHaveLength(1);
+    expect(out[0].name).toBe('Miso Black Cod');
+    expect(filtered(sampleRecipes, { filters: { cuisine: null, tags: ['fish', 'classic'], rating: 0, search: '' } })).toHaveLength(0);
   });
 
   it('search matches ingredients', () => {

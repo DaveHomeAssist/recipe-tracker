@@ -10,6 +10,7 @@ async function freshPage(page) {
       try {
         localStorage.removeItem(key);
         localStorage.removeItem(schemaKey);
+        localStorage.removeItem('recipe_journal_prefs');
       } catch {}
     },
     { key: KEY, schemaKey: SCHEMA_KEY }

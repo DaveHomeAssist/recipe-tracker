@@ -1,6 +1,9 @@
 .DS_Store
 recipe bookmarks.html
 node_modules/
+.env
+.env.local
+.env.*.local
 package-lock.json
 playwright-report/
 test-results/
