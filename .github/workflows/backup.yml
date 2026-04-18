@@ -1,0 +1,65 @@
+name: Nightly Notion backup
+# D9: export the Notion recipe DB to durable non-git storage every night.
+# Must be live and verified restorable BEFORE Phase M migration runs.
+#
+# Required repository secrets:
+#   NOTION_ACCESS_TOKEN        Notion integration token (PAT)
+#   NOTION_DATA_SOURCE_ID      target data source id
+#   BACKUP_DESTINATION         'local' | 's3' | 'blob'    (defaults to 'local')
+#   BACKUP_BUCKET, BACKUP_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
+#                              (only when BACKUP_DESTINATION=s3)
+#   BLOB_READ_WRITE_TOKEN      (only when BACKUP_DESTINATION=blob)
+#
+# local mode writes to ./backups/ in the runner workspace. The workflow
+# uploads that as an Artifact — good for dev and smoke tests, not durable.
+# s3 / blob modes are the production targets.
+
+on:
+  schedule:
+    - cron: '17 7 * * *' # 07:17 UTC daily = 03:17 ET in summer, 02:17 ET in winter
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install
+        run: npm ci
+
+      - name: Run backup
+        env:
+          NOTION_ACCESS_TOKEN: ${{ secrets.NOTION_ACCESS_TOKEN }}
+          NOTION_DATA_SOURCE_ID: ${{ secrets.NOTION_DATA_SOURCE_ID }}
+          BACKUP_DESTINATION: ${{ secrets.BACKUP_DESTINATION || 'local' }}
+          BACKUP_BUCKET: ${{ secrets.BACKUP_BUCKET }}
+          BACKUP_REGION: ${{ secrets.BACKUP_REGION }}
+          BACKUP_PREFIX: ${{ secrets.BACKUP_PREFIX }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
+        run: node scripts/backup_notion.mjs
+
+      - name: Upload local artifact (local mode only)
+        if: ${{ (secrets.BACKUP_DESTINATION || 'local') == 'local' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: recipes-backup-${{ github.run_id }}
+          path: backups/
+          retention-days: 30
