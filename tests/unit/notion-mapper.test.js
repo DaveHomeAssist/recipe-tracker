@@ -16,7 +16,7 @@ describe('recipeToNotionProperties', () => {
 
     expect(properties['App ID'].rich_text[0].text.content).toBe('recipe_1');
     expect(properties['Recipe Name'].title[0].text.content).toBe('Cacio e Pepe');
-    expect(properties.Cuisine.rich_text[0].text.content).toBe('Italian');
+    expect(properties.Cuisine.select.name).toBe('Italian');
     expect(properties.Photos.files[0].external.url).toBe('https://example.com/image.jpg');
     expect(properties.Steps.rich_text[0].text.content).toBe('Boil pasta');
     expect(properties.Rating.number).toBe(4);
@@ -42,7 +42,7 @@ describe('notionPageToRecipe', () => {
       properties: {
         'App ID': { rich_text: [{ plain_text: 'recipe_1' }] },
         'Recipe Name': { title: [{ plain_text: 'Cacio e Pepe' }] },
-        Cuisine: { rich_text: [{ plain_text: 'Italian' }] },
+        Cuisine: { select: { name: 'Italian' } },
         Source: { rich_text: [{ plain_text: 'Trattoria' }] },
         Location: { rich_text: [{ plain_text: 'Rome' }] },
         'Prep Time': { rich_text: [{ plain_text: '10 min' }] },
@@ -76,5 +76,18 @@ describe('notionPageToRecipe', () => {
       rating: 5,
       version: 3,
     });
+  });
+
+  it('falls back to legacy rich-text cuisine payloads', () => {
+    const recipe = notionPageToRecipe({
+      id: 'page_legacy',
+      properties: {
+        'App ID': { rich_text: [{ plain_text: 'recipe_legacy' }] },
+        'Recipe Name': { title: [{ plain_text: 'Soup' }] },
+        Cuisine: { rich_text: [{ plain_text: 'French' }] },
+      },
+    });
+
+    expect(recipe.cuisine).toBe('French');
   });
 });

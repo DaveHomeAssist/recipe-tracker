@@ -22,6 +22,10 @@ const title = (value) => ({ title: textChunks(value) });
 const url = (value) => ({ url: value || null });
 const number = (value) => ({ number: Number.isFinite(Number(value)) ? Number(value) : 0 });
 const date = (value) => ({ date: value ? { start: value } : null });
+const select = (value) => {
+  const name = String(value ?? '').trim();
+  return { select: name ? { name } : null };
+};
 const files = (value, name = 'Recipe photo') => {
   const cleanValue = String(value || '').trim();
   if (!cleanValue) return { files: [] };
@@ -49,7 +53,7 @@ const readFiles = (value = {}) => {
 export const recipeToNotionProperties = (recipe) => ({
   'App ID': richText(recipe.id),
   'Recipe Name': title(recipe.name),
-  Cuisine: richText(recipe.cuisine),
+  Cuisine: select(recipe.cuisine),
   Source: richText(recipe.source),
   Location: richText(recipe.location),
   'Prep Time': richText(recipe.preptime),
@@ -73,7 +77,7 @@ export const notionPageToRecipe = (page) => {
     id: joinText(props['App ID']?.rich_text),
     notionPageId: page.id,
     name: joinText(props['Recipe Name']?.title),
-    cuisine: joinText(props.Cuisine?.rich_text || props.Cuisine?.text),
+    cuisine: props.Cuisine?.select?.name || joinText(props.Cuisine?.rich_text || props.Cuisine?.text),
     source: joinText(props.Source?.rich_text),
     location: joinText(props.Location?.rich_text),
     preptime: joinText(props['Prep Time']?.rich_text),

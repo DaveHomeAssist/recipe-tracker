@@ -52,7 +52,7 @@ const makePage = ({
   properties: {
     'App ID': { rich_text: [{ plain_text: appId }] },
     'Recipe Name': { title: [{ plain_text: name }] },
-    Cuisine: { rich_text: [{ plain_text: 'Italian' }] },
+    Cuisine: { select: { name: 'Italian' } },
     Source: { rich_text: [{ plain_text: 'Trattoria' }] },
     Location: { rich_text: [{ plain_text: 'Rome' }] },
     'Prep Time': { rich_text: [{ plain_text: '10 min' }] },
