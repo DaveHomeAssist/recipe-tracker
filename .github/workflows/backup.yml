@@ -46,6 +46,36 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Resolve backup destination
+        id: backup_mode
+        shell: bash
+        run: |
+          destination="${BACKUP_DESTINATION:-local}"
+          echo "destination=$destination" >> "$GITHUB_OUTPUT"
+          echo "BACKUP_DESTINATION=$destination" >> "$GITHUB_ENV"
+
+      - name: Validate backup configuration
+        shell: bash
+        run: |
+          missing=()
+
+          [[ -n "$NOTION_ACCESS_TOKEN" ]] || missing+=("NOTION_ACCESS_TOKEN")
+          [[ -n "$NOTION_DATA_SOURCE_ID" ]] || missing+=("NOTION_DATA_SOURCE_ID")
+
+          case "${BACKUP_DESTINATION}" in
+            s3)
+              [[ -n "$BACKUP_BUCKET" ]] || missing+=("BACKUP_BUCKET")
+              ;;
+            blob)
+              [[ -n "$BLOB_READ_WRITE_TOKEN" ]] || missing+=("BLOB_READ_WRITE_TOKEN")
+              ;;
+          esac
+
+          if (( ${#missing[@]} > 0 )); then
+            echo "::error::Missing required backup configuration: ${missing[*]}"
+            exit 1
+          fi
+
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
@@ -54,14 +84,6 @@ jobs:
 
       - name: Install
         run: npm ci
-
-      - name: Resolve backup destination
-        id: backup_mode
-        shell: bash
-        run: |
-          destination="${BACKUP_DESTINATION:-local}"
-          echo "destination=$destination" >> "$GITHUB_OUTPUT"
-          echo "BACKUP_DESTINATION=$destination" >> "$GITHUB_ENV"
 
       - name: Run backup
         run: node scripts/backup_notion.mjs
