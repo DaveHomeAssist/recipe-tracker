@@ -45,6 +45,7 @@ const makePage = ({
   appId = 'recipe_1',
   name = 'Cacio e Pepe',
   url = 'https://example.com/cacio',
+  image = '',
   version = 1,
 } = {}) => ({
   id: pageId,
@@ -59,7 +60,14 @@ const makePage = ({
     Servings: { rich_text: [{ plain_text: '2' }] },
     Tags: { rich_text: [{ plain_text: 'Pasta' }] },
     'Source URL': { url },
-    Photos: { files: [] },
+    Photos: image ? {
+      files: [
+        {
+          type: 'external',
+          external: { url: image },
+        },
+      ],
+    } : { files: [] },
     'Date Tried': { date: { start: '2026-04-19' } },
     Rating: { number: 4 },
     Notes: { rich_text: [{ plain_text: 'Family favorite' }] },
@@ -316,6 +324,64 @@ describe('recipe proxy handlers', () => {
     expect(JSON.parse(res.body).data).toMatchObject({
       added: 1,
       duplicatesSkipped: 1,
+    });
+  });
+
+  it('backfills missing Notion photos for duplicate URLs during sync', async () => {
+    const updateMock = vi.fn().mockResolvedValue(
+      makePage({
+        appId: 'recipe_existing',
+        url: 'https://example.com/existing',
+        image: 'https://example.com/existing.jpg',
+        version: 2,
+      })
+    );
+    const createMock = vi.fn();
+    __setNotionClientForTests({
+      dataSources: {
+        query: vi.fn().mockResolvedValue({
+          results: [makePage({ appId: 'recipe_existing', url: 'https://example.com/existing', version: 1 })],
+          has_more: false,
+          next_cursor: null,
+        }),
+      },
+      pages: {
+        create: createMock,
+        update: updateMock,
+      },
+    });
+
+    const req = makeReq({
+      method: 'POST',
+      headers: { 'x-family-code': 'family-code' },
+      body: {
+        payload: {
+          schemaVersion: 5,
+          recipes: [
+            {
+              id: 'recipe_existing',
+              name: 'Existing',
+              sourceUrl: 'https://example.com/existing',
+              image: 'https://example.com/existing.jpg',
+            },
+          ],
+        },
+      },
+      url: '/api/recipes/sync',
+    });
+    const res = makeRes();
+
+    await recipeSyncHandler(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(createMock).not.toHaveBeenCalled();
+    expect(updateMock).toHaveBeenCalledTimes(1);
+    expect(updateMock.mock.calls[0][0].properties.Photos.files[0].external.url).toBe('https://example.com/existing.jpg');
+    expect(updateMock.mock.calls[0][0].properties.Version.number).toBe(2);
+    expect(JSON.parse(res.body).data).toMatchObject({
+      added: 0,
+      updated: 1,
+      duplicatesSkipped: 0,
     });
   });
 

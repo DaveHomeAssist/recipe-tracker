@@ -6,12 +6,57 @@ import { notionPageToRecipe } from './notion-mapper.js';
 const sameKey = (value) => String(value || '').trim().toLowerCase();
 const makeRecipeId = () =>
   globalThis.crypto?.randomUUID?.() || `recipe-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+const SYNC_BACKFILL_FIELDS = [
+  'name',
+  'cuisine',
+  'source',
+  'location',
+  'preptime',
+  'cooktime',
+  'servings',
+  'tags',
+  'url',
+  'image',
+  'date',
+  'notes',
+  'ingredients',
+  'instructions',
+];
 
 const normalizeRemoteRecipe = (recipe, overrides = {}) => ({
   ...recipe,
   ...overrides,
   tags: normalizeTags(recipe.tags),
 });
+
+const mergeRecipeBackfill = (existing, incoming) => {
+  const merged = { ...existing };
+  let changed = false;
+
+  for (const field of SYNC_BACKFILL_FIELDS) {
+    const current = String(existing?.[field] || '').trim();
+    const next = String(incoming?.[field] || '').trim();
+    if (!current && next) {
+      merged[field] = incoming[field];
+      changed = true;
+    }
+  }
+
+  const currentRating = Number(existing?.rating || 0);
+  const nextRating = Number(incoming?.rating || 0);
+  if (currentRating === 0 && nextRating > 0) {
+    merged.rating = nextRating;
+    changed = true;
+  }
+
+  if (!changed) return null;
+
+  return normalizeRemoteRecipe({
+    ...merged,
+    id: existing.id || incoming.id || makeRecipeId(),
+    version: Number(existing.version || 0) + 1,
+  });
+};
 
 export const listRecipes = () => queryAllRecipes();
 
@@ -201,26 +246,36 @@ export const syncRecipesToNotion = async (payload) => {
   );
 
   let added = 0;
+  let updated = 0;
   let duplicatesSkipped = 0;
 
   for (const recipe of incoming) {
     const urlKey = sameKey(recipe.url);
     if (urlKey && existingByUrl.has(urlKey)) {
-      duplicatesSkipped++;
+      const existingRecipe = existingByUrl.get(urlKey);
+      const merged = mergeRecipeBackfill(existingRecipe, recipe);
+      if (merged) {
+        const saved = await updateRecipePage(existingRecipe.notionPageId, merged);
+        existingByUrl.set(urlKey, saved);
+        updated++;
+      } else {
+        duplicatesSkipped++;
+      }
       continue;
     }
 
-    await createRecipePage({
+    const created = await createRecipePage({
       ...recipe,
       version: 1,
     });
 
-    if (urlKey) existingByUrl.set(urlKey, recipe);
+    if (urlKey) existingByUrl.set(urlKey, created);
     added++;
   }
 
   return {
     added,
+    updated,
     duplicatesSkipped,
     dropped: validated.dropped,
     total: incoming.length,

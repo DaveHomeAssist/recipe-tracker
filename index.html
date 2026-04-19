@@ -1704,7 +1704,11 @@ async function syncLibraryToNotion() {
     persist();
     render();
     const summary = result.summary?.data || result.summary;
-    showToast(`Synced ${summary?.added || 0} recipes to Notion.`, 'success');
+    const syncSummary = [];
+    if (summary?.added) syncSummary.push(`${summary.added} added`);
+    if (summary?.updated) syncSummary.push(`${summary.updated} updated`);
+    if (!syncSummary.length) syncSummary.push('0 changed');
+    showToast(`Synced ${syncSummary.join(', ')} to Notion.`, 'success');
   } catch (error) {
     console.error('sync to notion failed:', error);
     if (handleRemoteAuthFailure(error, 'Access expired or changed. Re-enter the family access code before syncing.')) {
