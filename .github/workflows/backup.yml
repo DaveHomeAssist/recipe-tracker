@@ -30,6 +30,18 @@ jobs:
   backup:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      NOTION_ACCESS_TOKEN: ${{ secrets.NOTION_ACCESS_TOKEN }}
+      NOTION_DATA_SOURCE_ID: ${{ secrets.NOTION_DATA_SOURCE_ID }}
+      BACKUP_DESTINATION: ${{ secrets.BACKUP_DESTINATION }}
+      BACKUP_BUCKET: ${{ secrets.BACKUP_BUCKET }}
+      BACKUP_REGION: ${{ secrets.BACKUP_REGION }}
+      BACKUP_PREFIX: ${{ secrets.BACKUP_PREFIX }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
+      BACKUP_VERIFY_LOCAL_COPY: '1'
+      BACKUP_VERIFY_LOCAL_PATH: backups/latest.json
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -43,26 +55,22 @@ jobs:
       - name: Install
         run: npm ci
 
+      - name: Resolve backup destination
+        id: backup_mode
+        shell: bash
+        run: |
+          destination="${BACKUP_DESTINATION:-local}"
+          echo "destination=$destination" >> "$GITHUB_OUTPUT"
+          echo "BACKUP_DESTINATION=$destination" >> "$GITHUB_ENV"
+
       - name: Run backup
-        env:
-          NOTION_ACCESS_TOKEN: ${{ secrets.NOTION_ACCESS_TOKEN }}
-          NOTION_DATA_SOURCE_ID: ${{ secrets.NOTION_DATA_SOURCE_ID }}
-          BACKUP_DESTINATION: ${{ secrets.BACKUP_DESTINATION || 'local' }}
-          BACKUP_BUCKET: ${{ secrets.BACKUP_BUCKET }}
-          BACKUP_REGION: ${{ secrets.BACKUP_REGION }}
-          BACKUP_PREFIX: ${{ secrets.BACKUP_PREFIX }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
-          BACKUP_VERIFY_LOCAL_COPY: '1'
-          BACKUP_VERIFY_LOCAL_PATH: backups/latest.json
         run: node scripts/backup_notion.mjs
 
       - name: Verify backup is restorable
         run: node scripts/verify_backup.mjs backups/latest.json
 
       - name: Upload local artifact (local mode only)
-        if: ${{ (secrets.BACKUP_DESTINATION || 'local') == 'local' }}
+        if: ${{ steps.backup_mode.outputs.destination == 'local' }}
         uses: actions/upload-artifact@v4
         with:
           name: recipes-backup-${{ github.run_id }}
