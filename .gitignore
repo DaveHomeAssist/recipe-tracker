@@ -4,7 +4,6 @@ node_modules/
 .env
 .env.local
 .env.*.local
-package-lock.json
 playwright-report/
 test-results/
 tests/e2e/.last-run.json
