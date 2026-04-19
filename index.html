@@ -416,6 +416,7 @@
     <button class="btn-toolbar" id="openTagManagerBtn" type="button" aria-label="Manage tags">🏷️ Manage Tags</button>
     <button class="btn-toolbar" id="exportBtn" type="button" aria-label="Export all recipes as a JSON file">⇩ Export</button>
     <button class="btn-toolbar" id="importBtn" type="button" aria-label="Import recipes from a JSON file">⇧ Import</button>
+    <button class="btn-toolbar" id="syncToNotionBtn" type="button" aria-label="Sync the local library to Notion" hidden>☁️ Sync to Notion</button>
     <input type="file" id="importFile" accept="application/json,.json" hidden>
   </div>
 </div>
@@ -552,10 +553,10 @@ import { validateImport } from './src/recipe-schema.js';
 import { mergeSeedImages } from './src/seed-images.js';
 import { createRecipeApi } from './src/recipe-api.js';
 import { installGlobalErrorReporting } from './src/client-error-reporting.js';
-import { clearStoredSession, getStoredSessionToken } from './src/session-storage.js';
+import { clearStoredFamilyCode, loadStoredFamilyCode } from './src/family-code-storage.js';
 import { submitAccessCode } from './src/auth.js';
 import { loadRemoteRecipeCache, saveRemoteRecipeCache } from './src/recipe-cache.js';
-import { bootstrapRemoteRecipes, deleteRemoteRecipe, importRemoteRecipes, saveRemoteRecipe } from './src/recipe-store.js';
+import { bootstrapRemoteRecipes, deleteRemoteRecipe, replayQueuedRemoteWrites, saveRemoteRecipe, syncLocalCorpusToRemote } from './src/recipe-remote.js';
 import { loadPrefs, recordEdit, recordExport, recordFilter, recordRating, recordSearch, recordView, savePrefs } from './src/recipe-prefs.js';
 
 // ══════════════════════════════════════════════
@@ -572,17 +573,23 @@ const DEFAULT_FILTERS = Object.freeze({
 });
 const MAX_VISIBLE_TAGS = 12;
 const FALLBACK_CUISINES = ['Italian','French','Japanese','Mexican','Indian','American','Mediterranean','Thai','Chinese','Greek','Spanish','Other'];
+const HOSTNAME = globalThis.location?.hostname || '';
+const IS_GITHUB_PAGES_PRODUCTION = HOSTNAME === 'davehomeassist.github.io';
+const DEFAULT_REMOTE_API_BASE_URL = IS_GITHUB_PAGES_PRODUCTION
+  ? 'https://recipe-tracker-beta.vercel.app/api'
+  : '/api';
 const APP_CONFIG = Object.freeze({
   syncMode: 'local',
-  apiBaseUrl: '/api/v1',
+  USE_REMOTE_BACKEND: IS_GITHUB_PAGES_PRODUCTION,
+  apiBaseUrl: DEFAULT_REMOTE_API_BASE_URL,
   ...(globalThis.RECIPE_TRACKER_CONFIG || {}),
 });
-const REMOTE_MODE = APP_CONFIG.syncMode === 'remote';
+const REMOTE_MODE = Boolean(APP_CONFIG.USE_REMOTE_BACKEND || APP_CONFIG.syncMode === 'remote');
 const remoteApi = REMOTE_MODE
   ? createRecipeApi({
-      baseUrl: APP_CONFIG.apiBaseUrl || '/api/v1',
-      getSessionToken: getStoredSessionToken,
-      onUnauthorized: clearStoredSession,
+      baseUrl: APP_CONFIG.apiBaseUrl || '/api',
+      getFamilyCode: loadStoredFamilyCode,
+      onUnauthorized: clearStoredFamilyCode,
     })
   : null;
 let prefs = loadPrefs();
@@ -714,10 +721,14 @@ function loadLocalState() {
   }
 }
 
+const initialLocalState = loadLocalState();
 const initialRemoteCache = REMOTE_MODE ? loadRemoteRecipeCache() : { recipes: [], tagRegistry: {} };
+const initialRemoteState = hydrateRecipeState(initialRemoteCache.recipes, initialRemoteCache.tagRegistry);
 const initialDataState = REMOTE_MODE
-  ? { ...hydrateRecipeState(initialRemoteCache.recipes, initialRemoteCache.tagRegistry), hasStoredState: false, requiresTagMigration: false }
-  : loadLocalState();
+  ? (initialLocalState.hasStoredState
+      ? initialLocalState
+      : { ...initialRemoteState, hasStoredState: Boolean(initialRemoteCache.recipes.length), requiresTagMigration: false })
+  : initialLocalState;
 
 let recipes = initialDataState.recipes;
 let tagRegistry = initialDataState.tagRegistry;
@@ -858,18 +869,13 @@ function persist(options = {}) {
   const hydrated = hydrateRecipeState(recipes, tagRegistry);
   recipes = hydrated.recipes;
   tagRegistry = hydrated.tagRegistry;
-  if (REMOTE_MODE) {
-    try {
-      saveRemoteRecipeCache(recipes, tagRegistry);
-    } catch (e) {
-      console.error('remote cache persist failed:', e);
-    }
-    return;
-  }
   const { markSchema = true } = options;
   try {
     localStorage.setItem(KEY, JSON.stringify({ recipes, tagRegistry }));
     if (markSchema) setStoredSchemaVersion();
+    if (REMOTE_MODE) {
+      saveRemoteRecipeCache(recipes, tagRegistry);
+    }
   } catch (e) {
     // QuotaExceededError, private-mode Safari, etc. Surface it so users notice.
     console.error('persist failed:', e);
@@ -1480,9 +1486,9 @@ function openAuthModal(message = 'Enter the family access code to load the share
   openModal('authModal');
 }
 
-function handleRemoteAuthFailure(error, message = 'Session expired. Re-enter the family access code to continue.') {
-  if (error?.code !== 'UNAUTHORIZED') return false;
-  clearStoredSession();
+function handleRemoteAuthFailure(error, message = 'Access expired or changed. Re-enter the family access code to continue.') {
+  if (error?.code !== 'INVALID_FAMILY_CODE') return false;
+  clearStoredFamilyCode();
   openAuthModal(message);
   return true;
 }
@@ -1492,23 +1498,46 @@ async function syncRemoteRecipes({ allowPrompt = true } = {}) {
 
   bootError = '';
   try {
-    const state = await bootstrapRemoteRecipes({ api: remoteApi });
+    const state = await bootstrapRemoteRecipes({
+      api: remoteApi,
+      fallback: {
+        recipes,
+        tagRegistry,
+        fetchedAt: initialRemoteCache.fetchedAt || '',
+      },
+    });
     const hydrated = hydrateRecipeState(state.recipes, state.tagRegistry);
     recipes = hydrated.recipes;
     tagRegistry = hydrated.tagRegistry;
-    persist();
-    render();
 
     if (!state.authenticated) {
+      persist();
       if (allowPrompt) openAuthModal();
+      render();
       return;
     }
     if (state.offline) {
+      persist();
       showToast('Offline: showing last synced recipes.', 'warn');
+      render();
+      return;
     }
+
+    const hasQueuedWrites = Number(state.queuedWrites || 0) > 0;
+    const replay = hasQueuedWrites ? await replayQueuedRemoteWrites({ api: remoteApi }) : { applied: 0, recipes: null };
+    if (replay.applied && replay.recipes) {
+      const replayState = hydrateRecipeState(replay.recipes, tagRegistry);
+      recipes = replayState.recipes;
+      tagRegistry = replayState.tagRegistry;
+      persist();
+      showToast('Queued local changes synced to Notion.', 'success');
+    } else {
+      persist();
+    }
+    render();
   } catch (error) {
     console.error('remote bootstrap failed:', error);
-    if (handleRemoteAuthFailure(error, 'Session expired. Re-enter the family access code to load shared recipes.')) {
+    if (handleRemoteAuthFailure(error, 'Access expired or changed. Re-enter the family access code to load shared recipes.')) {
       render();
       return;
     }
@@ -1519,7 +1548,7 @@ async function syncRemoteRecipes({ allowPrompt = true } = {}) {
     if (cached.recipes.length) {
       showToast('Offline: showing last synced recipes.', 'warn');
     } else {
-      bootError = 'Cannot load recipes. You’re offline and this device has never synced.';
+      bootError = 'Cannot load recipes. You are offline and this device has never synced.';
     }
     render();
   }
@@ -1652,6 +1681,43 @@ function exportRecipes() {
   showToast(`Exported ${recipes.length} recipes ✓`, 'success');
 }
 
+async function syncLibraryToNotion() {
+  if (!REMOTE_MODE) return;
+  try {
+    const localShadow = loadLocalState();
+    const payload = {
+      schemaVersion: SCHEMA_VERSION,
+      exportedAt: new Date().toISOString(),
+      recipes: localShadow.recipes?.length ? localShadow.recipes : recipes,
+      tagRegistry: localShadow.tagRegistry && Object.keys(localShadow.tagRegistry).length
+        ? localShadow.tagRegistry
+        : tagRegistry,
+    };
+    const result = await syncLocalCorpusToRemote({
+      api: remoteApi,
+      payload,
+      tagRegistry: payload.tagRegistry,
+    });
+    const hydrated = hydrateRecipeState(result.recipes, payload.tagRegistry);
+    recipes = hydrated.recipes;
+    tagRegistry = hydrated.tagRegistry;
+    persist();
+    render();
+    const summary = result.summary?.data || result.summary;
+    showToast(`Synced ${summary?.added || 0} recipes to Notion.`, 'success');
+  } catch (error) {
+    console.error('sync to notion failed:', error);
+    if (handleRemoteAuthFailure(error, 'Access expired or changed. Re-enter the family access code before syncing.')) {
+      return;
+    }
+    if (error?.code === 'NETWORK_ERROR') {
+      showToast('Offline — changes saved locally', 'warn');
+      return;
+    }
+    showToast(`⚠️ Sync failed: ${error.message || 'server error'}`, 'error');
+  }
+}
+
 function importRecipes(file) {
   const reader = new FileReader();
   reader.onload = async () => {
@@ -1669,24 +1735,6 @@ function importRecipes(file) {
       }
       const droppedMsg = dropped ? ` Dropped ${dropped} invalid recipe${dropped === 1 ? '' : 's'}.` : '';
       const mode = confirm(`Found ${incoming.length} recipes in the file.\n\nOK  = Merge with your current library (duplicates by URL are skipped)\nCancel = Replace your entire library with the imported file`);
-      if (REMOTE_MODE) {
-        const replaceConfirmed = !mode
-          ? confirm(`Replace your entire shared library with ${incoming.length} imported recipes? This cannot be undone.`)
-          : false;
-        if (!mode && !replaceConfirmed) return;
-        const result = await importRemoteRecipes({
-          api: remoteApi,
-          mode: mode ? 'merge' : 'replace',
-          payload: data,
-          replaceConfirmed,
-        });
-        await syncRemoteRecipes({ allowPrompt: false });
-        const summary = result?.data || result;
-        showToast(
-          `${mode ? 'Merged' : 'Replaced'} shared library.${summary?.duplicatesSkipped ? ` ${summary.duplicatesSkipped} duplicates skipped.` : ''}${droppedMsg}`
-        );
-        return;
-      }
       if (mode) {
         const normalizedIncoming = withUniqueIds(recipes, incoming);
         // Merge: combine, then dedupe by url (case-insensitive) keeping existing records first.
@@ -1706,17 +1754,33 @@ function importRecipes(file) {
         recipes = [...byUrl.values(), ...noUrl];
         tagRegistry = mergeTagRegistryMetadata(tagRegistry, incomingRegistry);
         persist(); render();
-        showToast(`Merged ${added} new recipes (${incoming.length - added} duplicates skipped).${droppedMsg}`, 'success');
+        if (REMOTE_MODE) {
+          showActionToast(
+            `Imported locally. ${added} new recipes ready to sync.${droppedMsg}`,
+            'Sync Now',
+            () => syncLibraryToNotion()
+          );
+        } else {
+          showToast(`Merged ${added} new recipes (${incoming.length - added} duplicates skipped).${droppedMsg}`, 'success');
+        }
       } else {
         if (!confirm(`Replace your entire library with ${incoming.length} imported recipes? This cannot be undone (unless you exported a backup first).`)) return;
         recipes = withUniqueIds([], incoming);
         tagRegistry = incomingRegistry;
         persist(); render();
-        showToast(`Replaced library with ${incoming.length} recipes.${droppedMsg}`, 'success');
+        if (REMOTE_MODE) {
+          showActionToast(
+            `Imported locally. ${incoming.length} recipes ready to sync.${droppedMsg}`,
+            'Sync Now',
+            () => syncLibraryToNotion()
+          );
+        } else {
+          showToast(`Replaced library with ${incoming.length} recipes.${droppedMsg}`, 'success');
+        }
       }
     } catch (e) {
       console.error('import failed:', e);
-      handleRemoteAuthFailure(e, 'Session expired. Re-enter the family access code before importing.');
+      handleRemoteAuthFailure(e, 'Access expired or changed. Re-enter the family access code before importing.');
       showToast(`⚠️ Import failed: ${e.message || 'invalid file'}`, 'error');
     }
   };
@@ -1730,6 +1794,7 @@ document.getElementById('importFile').addEventListener('change', (e) => {
   e.target.value = '';
   if (f) importRecipes(f);
 });
+document.getElementById('syncToNotionBtn').addEventListener('click', syncLibraryToNotion);
 
 // ══════════════════════════════════════════════
 // MANUAL FORM
@@ -1856,7 +1921,8 @@ document.getElementById('saveFormBtn').addEventListener('click', async ()=>{
   };
   if (REMOTE_MODE) {
     try {
-      const saved = await saveRemoteRecipe({ api: remoteApi, recipe: r, previous: existing });
+      const result = await saveRemoteRecipe({ api: remoteApi, recipe: r, previous: existing });
+      const saved = result.recipe;
       if (editingId) {
         const i = recipes.findIndex(x => sameId(x.id, editingId));
         if (i > -1) recipes[i] = saved;
@@ -1864,9 +1930,12 @@ document.getElementById('saveFormBtn').addEventListener('click', async ()=>{
         recipes.unshift(saved);
       }
       persist();
+      if (result.offline) {
+        showToast('Offline — changes saved locally', 'warn');
+      }
     } catch (error) {
       console.error('remote save failed:', error);
-      handleRemoteAuthFailure(error, 'Session expired. Re-enter the family access code before saving.');
+      handleRemoteAuthFailure(error, 'Access expired or changed. Re-enter the family access code before saving.');
       showToast(`⚠️ Save failed: ${error.message || 'server error'}`, 'error');
       return;
     }
@@ -2123,15 +2192,15 @@ function del(id) {
   const removed = recipes[idx];
   if (REMOTE_MODE) {
     deleteRemoteRecipe({ api: remoteApi, recipe: removed })
-      .then(() => {
+      .then((result) => {
         recipes.splice(idx, 1);
         prefs = recordEdit(prefs);
         persist(); render();
-        showToast(`"${removed.name}" deleted`);
+        showToast(result?.offline ? 'Offline — changes saved locally' : `"${removed.name}" deleted`);
       })
       .catch((error) => {
         console.error('remote delete failed:', error);
-        handleRemoteAuthFailure(error, 'Session expired. Re-enter the family access code before deleting.');
+        handleRemoteAuthFailure(error, 'Access expired or changed. Re-enter the family access code before deleting.');
         showToast(`⚠️ Delete failed: ${error.message || 'server error'}`, 'error');
       });
     return;
@@ -2183,7 +2252,10 @@ function closeModal(id) {
   }
   // Restore focus to whatever opened the modal.
   if (lastFocusedBeforeModal && document.contains(lastFocusedBeforeModal)) {
-    try { lastFocusedBeforeModal.focus(); } catch {}
+    try { lastFocusedBeforeModal.focus({ preventScroll: true }); }
+    catch {
+      try { lastFocusedBeforeModal.focus(); } catch {}
+    }
   }
 }
 document.querySelectorAll('.modal-overlay').forEach(el=>el.addEventListener('click',e=>{ if(e.target===el) closeModal(el.id); }));
@@ -2282,10 +2354,10 @@ function showMultiActionToast(msg, actions, timeout = 12000) {
 }
 
 installGlobalErrorReporting({
-  endpoint: `${APP_CONFIG.apiBaseUrl || '/api/v1'}/log/client-error`,
+  endpoint: `${APP_CONFIG.apiBaseUrl || '/api'}/log/client-error`,
   onToast: (message) => showToast(message, 'error'),
   getContext: () => ({
-    syncMode: APP_CONFIG.syncMode,
+    syncMode: REMOTE_MODE ? 'remote' : 'local',
     remoteMode: REMOTE_MODE,
     recipeCount: Array.isArray(recipes) ? recipes.length : 0,
   }),
@@ -2416,7 +2488,11 @@ if (!REMOTE_MODE && initialSchemaVersion < SCHEMA_VERSION) {
   migrateSeedImagesIfNeeded();
 }
 if (REMOTE_MODE) {
+  document.getElementById('syncToNotionBtn').hidden = false;
   syncRemoteRecipes();
+  window.addEventListener('online', () => {
+    syncRemoteRecipes({ allowPrompt: false });
+  });
 }
 registerServiceWorker();
 </script>

@@ -1,6 +1,7 @@
 import { dedupeByUrl, normalizeTags } from '../recipe-lib.js';
 import { validateImport, validateRecipe } from '../recipe-schema.js';
-import { createRecipePage, findRecipeByAppId, queryAllRecipes, updateRecipePage } from './notion-api.js';
+import { archiveRecipePage, createRecipePage, findRecipeByAppId, findRecipePageByAppId, queryAllRecipes, updateRecipePage } from './notion-api.js';
+import { notionPageToRecipe } from './notion-mapper.js';
 
 const sameKey = (value) => String(value || '').trim().toLowerCase();
 const makeRecipeId = () =>
@@ -14,6 +15,17 @@ const normalizeRemoteRecipe = (recipe, overrides = {}) => ({
 
 export const listRecipes = () => queryAllRecipes();
 
+export const getRecipe = async (id) => {
+  const recipe = await findRecipeByAppId(id);
+  if (!recipe) {
+    const error = new Error('Recipe not found');
+    error.code = 'NOT_FOUND';
+    error.status = 404;
+    throw error;
+  }
+  return recipe;
+};
+
 export const createRecipe = async (payload) => {
   const validated = validateRecipe(payload);
   if (!validated) {
@@ -25,7 +37,6 @@ export const createRecipe = async (payload) => {
 
   const recipe = normalizeRemoteRecipe(validated, {
     id: validated.id || makeRecipeId(),
-    deleted: false,
     version: 1,
   });
   return createRecipePage(recipe);
@@ -33,7 +44,7 @@ export const createRecipe = async (payload) => {
 
 export const updateRecipe = async (id, patch) => {
   const existing = await findRecipeByAppId(id);
-  if (!existing || existing.deleted) {
+  if (!existing) {
     const error = new Error('Recipe not found');
     error.code = 'NOT_FOUND';
     error.status = 404;
@@ -47,35 +58,34 @@ export const updateRecipe = async (id, patch) => {
     throw error;
   }
 
-  const merged = normalizeRemoteRecipe(
-    validateRecipe({
-      ...existing,
-      ...patch,
-      id: existing.id,
-      version: existing.version + 1,
-      deleted: false,
-    })
-  );
+  const validated = validateRecipe({
+    ...existing,
+    ...patch,
+    id: existing.id,
+    version: existing.version + 1,
+  });
 
-  if (!merged) {
+  if (!validated) {
     const error = new Error('Recipe payload is invalid');
     error.code = 'VALIDATION_FAILED';
     error.status = 400;
     throw error;
   }
 
+  const merged = normalizeRemoteRecipe(validated);
   return updateRecipePage(existing.notionPageId, merged);
 };
 
 export const deleteRecipe = async (id, version) => {
-  const existing = await findRecipeByAppId(id);
-  if (!existing || existing.deleted) {
+  const existingPage = await findRecipePageByAppId(id);
+  if (!existingPage) {
     const error = new Error('Recipe not found');
     error.code = 'NOT_FOUND';
     error.status = 404;
     throw error;
   }
 
+  const existing = notionPageToRecipe(existingPage);
   if (Number(version) !== Number(existing.version)) {
     const error = new Error('This recipe was changed on another device.');
     error.code = 'VERSION_CONFLICT';
@@ -83,11 +93,11 @@ export const deleteRecipe = async (id, version) => {
     throw error;
   }
 
-  return updateRecipePage(existing.notionPageId, {
-    ...existing,
-    deleted: true,
-    version: existing.version + 1,
-  });
+  await archiveRecipePage(existing.notionPageId);
+  return {
+    id: existing.id,
+    archived: true,
+  };
 };
 
 export const importRecipesToNotion = async ({ mode, payload, replaceConfirmed = false }) => {
@@ -103,7 +113,6 @@ export const importRecipesToNotion = async ({ mode, payload, replaceConfirmed = 
     validated.recipes.map((recipe) =>
       normalizeRemoteRecipe(recipe, {
         id: recipe.id || makeRecipeId(),
-        deleted: false,
         version: 1,
       })
     )
@@ -120,11 +129,7 @@ export const importRecipesToNotion = async ({ mode, payload, replaceConfirmed = 
     }
 
     for (const recipe of existing) {
-      await updateRecipePage(recipe.notionPageId, {
-        ...recipe,
-        deleted: true,
-        version: recipe.version + 1,
-      });
+      await archiveRecipePage(recipe.notionPageId);
     }
 
     for (const recipe of incoming) {
@@ -167,5 +172,57 @@ export const importRecipesToNotion = async ({ mode, payload, replaceConfirmed = 
     updated: 0,
     duplicatesSkipped,
     dropped: validated.dropped,
+  };
+};
+
+export const syncRecipesToNotion = async (payload) => {
+  const validated = validateImport(payload);
+  if (!validated.ok) {
+    const error = new Error(validated.error);
+    error.code = 'IMPORT_INVALID';
+    error.status = 400;
+    throw error;
+  }
+
+  const incoming = dedupeByUrl(
+    validated.recipes.map((recipe) =>
+      normalizeRemoteRecipe(recipe, {
+        id: recipe.id || makeRecipeId(),
+        version: Number(recipe.version || 1),
+      })
+    )
+  );
+
+  const existing = await queryAllRecipes();
+  const existingByUrl = new Map(
+    existing
+      .filter((recipe) => sameKey(recipe.url))
+      .map((recipe) => [sameKey(recipe.url), recipe])
+  );
+
+  let added = 0;
+  let duplicatesSkipped = 0;
+
+  for (const recipe of incoming) {
+    const urlKey = sameKey(recipe.url);
+    if (urlKey && existingByUrl.has(urlKey)) {
+      duplicatesSkipped++;
+      continue;
+    }
+
+    await createRecipePage({
+      ...recipe,
+      version: 1,
+    });
+
+    if (urlKey) existingByUrl.set(urlKey, recipe);
+    added++;
+  }
+
+  return {
+    added,
+    duplicatesSkipped,
+    dropped: validated.dropped,
+    total: incoming.length,
   };
 };

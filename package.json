@@ -12,6 +12,9 @@
     "serve": "python3 scripts/static_server.py",
     "migrate:notion": "node scripts/import_export_to_notion.mjs"
   },
+  "dependencies": {
+    "@notionhq/client": "^5.14.0"
+  },
   "devDependencies": {
     "vitest": "^2.1.9",
     "jsdom": "^25.0.1",

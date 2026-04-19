@@ -1,26 +1,25 @@
-import { clearStoredSession, storeSession } from './session-storage.js';
+import { clearStoredFamilyCode, loadStoredFamilyCode, storeFamilyCode } from './family-code-storage.js';
 
 export const checkSession = async (api) => {
-  const result = await api.getSession();
-  if (!result?.authenticated) {
-    clearStoredSession();
+  const code = loadStoredFamilyCode();
+  if (!code) return false;
+  try {
+    await api.health();
+    return true;
+  } catch {
+    clearStoredFamilyCode();
     return false;
   }
-  return true;
 };
 
 export const submitAccessCode = async (api, accessCode) => {
   const trimmed = String(accessCode || '').trim();
   if (!trimmed) throw new Error('Access code is required');
-  const session = await api.createSession(trimmed);
-  if (!session?.token || !session?.expiresAt) {
-    throw new Error('Server did not return a valid session');
-  }
-  storeSession(session);
+  await api.verifyAccessCode(trimmed);
+  storeFamilyCode(trimmed);
   return true;
 };
 
-export const logoutSession = async (api) => {
-  await api.clearSession();
-  clearStoredSession();
+export const logoutSession = async () => {
+  clearStoredFamilyCode();
 };

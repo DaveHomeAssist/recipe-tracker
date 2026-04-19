@@ -14,8 +14,33 @@ export const parseAllowedOrigins = (raw) =>
       .filter(Boolean)
   );
 
-export const isOriginAllowed = (origin, allowedOrigins) =>
-  !!origin && allowedOrigins.has(origin);
+const inferRequestProtocol = (req) => {
+  const forwardedProto = String(req.headers?.['x-forwarded-proto'] || '')
+    .split(',')[0]
+    .trim()
+    .toLowerCase();
+  if (forwardedProto) return forwardedProto;
+  if (req.socket?.encrypted) return 'https';
+
+  const host = String(req.headers?.host || '').toLowerCase();
+  if (host.startsWith('localhost:') || host.startsWith('127.0.0.1:') || host.startsWith('[::1]')) {
+    return 'http';
+  }
+  return 'https';
+};
+
+export const isSameOriginRequest = (req, origin) => {
+  if (!origin || !req?.headers?.host) return false;
+  try {
+    const parsedOrigin = new URL(origin);
+    return parsedOrigin.host === String(req.headers.host) && parsedOrigin.protocol === `${inferRequestProtocol(req)}:`;
+  } catch {
+    return false;
+  }
+};
+
+export const isOriginAllowed = (origin, allowedOrigins, req) =>
+  !!origin && (allowedOrigins.has(origin) || isSameOriginRequest(req, origin));
 
 export const applyCors = (req, res) => {
   const allowedOrigins = parseAllowedOrigins(
@@ -24,10 +49,10 @@ export const applyCors = (req, res) => {
   if (!allowedOrigins.size) return;
 
   const origin = req.headers?.origin;
-  if (!isOriginAllowed(origin, allowedOrigins)) return;
+  if (!isOriginAllowed(origin, allowedOrigins, req)) return;
 
   res.setHeader('Access-Control-Allow-Origin', origin);
-  res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type, X-Family-Code, x-family-code');
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PATCH,DELETE,OPTIONS');
   res.setHeader('Vary', 'Origin');
 };
@@ -39,7 +64,7 @@ export const rejectDisallowedOrigin = (req, res) => {
   if (!allowedOrigins.size) return false;
 
   const origin = req.headers?.origin;
-  if (!origin || isOriginAllowed(origin, allowedOrigins)) return false;
+  if (!origin || isOriginAllowed(origin, allowedOrigins, req)) return false;
 
   sendError(req, res, 403, 'CORS_FORBIDDEN', 'Origin is not allowed');
   return true;

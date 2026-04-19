@@ -32,6 +32,30 @@ describe('validateRecipe — happy path', () => {
     expect(out.id).toBe('42'); // coerced to string
   });
 
+  it('accepts sourceUrl as an alias for url', () => {
+    const out = validateRecipe({
+      name: 'Alias Check',
+      sourceUrl: 'https://example.com/source-url',
+    });
+    expect(out.url).toBe('https://example.com/source-url');
+  });
+
+  it('accepts Phase D field aliases and preserves version', () => {
+    const out = validateRecipe({
+      name: 'Alias Bundle',
+      method: 'Stir',
+      prepTime: '5 min',
+      cookTime: '10 min',
+      dateTried: '2026-04-19',
+      version: 2,
+    });
+    expect(out.instructions).toBe('Stir');
+    expect(out.preptime).toBe('5 min');
+    expect(out.cooktime).toBe('10 min');
+    expect(out.date).toBe('2026-04-19');
+    expect(out.version).toBe(2);
+  });
+
   it('preserves a minimal recipe (name only)', () => {
     const out = validateRecipe({ name: 'Toast' });
     expect(out).not.toBeNull();
@@ -74,14 +98,14 @@ describe('validateRecipe — field coercion and sanitization', () => {
     expect(Object.keys(out).sort()).toEqual([
       'cooktime','cuisine','date','id','image','ingredients','instructions',
       'location','name','notes','preptime','rating','servings','source',
-      'tags','url',
+      'tags','url','version',
     ]);
   });
 
   it('drops javascript: URLs in url and image fields', () => {
     const out = validateRecipe({
       name: 'x',
-      url: 'javascript:alert(1)',
+      sourceUrl: 'javascript:alert(1)',
       image: 'JavaScript:alert(2)',
     });
     expect(out.url).toBe('');

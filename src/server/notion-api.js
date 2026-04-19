@@ -1,12 +1,8 @@
+import { Client } from '@notionhq/client';
 import { activeRecipesFilter, appIdFilter, notionPageToRecipe, recipeToNotionProperties } from './notion-mapper.js';
 import { DEFAULT_JOURNAL_ID, JOURNAL_PREFIX } from './journal.js';
 import { log } from './logger.js';
 
-const API_BASE = 'https://api.notion.com/v1';
-
-// Multi-tenant revival pattern. Today this resolves to the single env-configured
-// data source; future multi-family deployments swap in a journalId -> DB map
-// without changing every callsite. See NOTION_BACKEND_SPEC.md "Chosen Model".
 const resolveDataSourceId = (journalId = DEFAULT_JOURNAL_ID) => {
   if (!String(journalId).startsWith(JOURNAL_PREFIX)) {
     throw new Error(`Multi-journal not enabled (got ${journalId})`);
@@ -23,112 +19,142 @@ const retryBaseMs = () =>
 const retryDelayMs = (attempt, retryAfterSeconds = 0) =>
   Math.max(Math.max(0, retryAfterSeconds) * 1000, retryBaseMs() * (2 ** attempt));
 
-export const notionFetch = async (path, options = {}, attempt = 0) => {
+let notionClientOverride = null;
+
+export const __setNotionClientForTests = (client) => {
+  notionClientOverride = client;
+};
+
+const getNotionClient = () => {
   const token = process.env.NOTION_ACCESS_TOKEN;
-  const version = process.env.NOTION_VERSION || '2022-06-28';
   if (!token) throw new Error('Missing NOTION_ACCESS_TOKEN');
-
-  const response = await fetch(`${API_BASE}${path}`, {
-    method: options.method || 'GET',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Notion-Version': version,
-      'Content-Type': 'application/json',
-      ...(options.headers || {}),
-    },
-    body: options.body ? JSON.stringify(options.body) : undefined,
+  if (notionClientOverride) return notionClientOverride;
+  return new Client({
+    auth: token,
+    notionVersion: process.env.NOTION_VERSION || '2026-03-11',
   });
+};
 
-  if (response.status === 429) {
-    const retryAfter = Number(response.headers.get('Retry-After') || 0);
-    if (attempt < retryAttempts()) {
-      const delayMs = retryDelayMs(attempt, retryAfter);
-      log.warn('notion.rate_limited', {
-        path,
-        attempt: attempt + 1,
-        delayMs,
-        retryAfter,
-      });
-      await sleep(delayMs);
-      return notionFetch(path, options, attempt + 1);
+const normalizeNotionError = (error) => {
+  if (!error) return error;
+  const retryAfterHeader =
+    error.headers?.['retry-after'] ||
+    error.headers?.['Retry-After'] ||
+    error.response?.headers?.get?.('retry-after') ||
+    error.response?.headers?.get?.('Retry-After') ||
+    0;
+  const normalized = error instanceof Error ? error : new Error(String(error.message || error));
+  normalized.status = Number(error.status || normalized.status || 500);
+  normalized.code = error.code || normalized.code || 'UPSTREAM_NOTION_ERROR';
+  normalized.retryAfterSeconds = Number(retryAfterHeader || 0);
+  return normalized;
+};
+
+const withNotionRateLimitRetry = async (operation, context, attempt = 0) => {
+  try {
+    return await operation();
+  } catch (rawError) {
+    const error = normalizeNotionError(rawError);
+    if (Number(error.status) === 429) {
+      const retryAfter = Number(error.retryAfterSeconds || 0);
+      if (attempt < retryAttempts()) {
+        const delayMs = retryDelayMs(attempt, retryAfter);
+        log.warn('notion.rate_limited', {
+          ...context,
+          attempt: attempt + 1,
+          delayMs,
+          retryAfter,
+        });
+        await sleep(delayMs);
+        return withNotionRateLimitRetry(operation, context, attempt + 1);
+      }
+      error.code = 'RATE_LIMITED';
     }
-
-    const error = await response.json().catch(() => null);
-    const err = new Error(error?.message || 'Notion rate limit exceeded');
-    err.status = 429;
-    err.code = 'RATE_LIMITED';
-    throw err;
+    throw error;
   }
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => null);
-    const message = error?.message || `Notion request failed with ${response.status}`;
-    const err = new Error(message);
-    err.status = response.status;
-    err.code = response.status === 429 ? 'RATE_LIMITED' : (error?.code || 'UPSTREAM_NOTION_ERROR');
-    throw err;
-  }
-
-  if (response.status === 204) return null;
-  return response.json();
 };
 
 export const queryAllRecipes = async () => {
+  const notion = getNotionClient();
   const dataSourceId = resolveDataSourceId();
 
   const recipes = [];
   let nextCursor;
   do {
-    const payload = {
-      filter: activeRecipesFilter,
-      page_size: 100,
-      start_cursor: nextCursor,
-      sorts: [{ property: 'Name', direction: 'ascending' }],
-    };
-    const out = await notionFetch(`/data_sources/${dataSourceId}/query`, {
-      method: 'POST',
-      body: payload,
-    });
-    recipes.push(...out.results.map(notionPageToRecipe));
-    nextCursor = out.has_more ? out.next_cursor : null;
+    const response = await withNotionRateLimitRetry(
+      () =>
+        notion.dataSources.query({
+          data_source_id: dataSourceId,
+          ...(activeRecipesFilter ? { filter: activeRecipesFilter } : {}),
+          page_size: 100,
+          ...(nextCursor ? { start_cursor: nextCursor } : {}),
+          sorts: [{ property: 'Recipe Name', direction: 'ascending' }],
+        }),
+      { action: 'queryAllRecipes', dataSourceId }
+    );
+    recipes.push(...response.results.map(notionPageToRecipe));
+    nextCursor = response.has_more ? response.next_cursor : null;
   } while (nextCursor);
 
   return recipes;
 };
 
-export const findRecipeByAppId = async (id) => {
+export const findRecipePageByAppId = async (id) => {
+  const notion = getNotionClient();
   const dataSourceId = resolveDataSourceId();
-  const out = await notionFetch(`/data_sources/${dataSourceId}/query`, {
-    method: 'POST',
-    body: {
-      filter: {
-        and: [appIdFilter(id)],
-      },
-      page_size: 1,
-    },
-  });
-  const page = out.results?.[0];
+  const response = await withNotionRateLimitRetry(
+    () =>
+      notion.dataSources.query({
+        data_source_id: dataSourceId,
+        filter: appIdFilter(id),
+        page_size: 1,
+      }),
+    { action: 'findRecipePageByAppId', dataSourceId, id }
+  );
+  return response.results?.[0] || null;
+};
+
+export const findRecipeByAppId = async (id) => {
+  const page = await findRecipePageByAppId(id);
   return page ? notionPageToRecipe(page) : null;
 };
 
 export const createRecipePage = async (recipe) => {
+  const notion = getNotionClient();
   const dataSourceId = resolveDataSourceId();
-  const out = await notionFetch('/pages', {
-    method: 'POST',
-    body: {
-      parent: { data_source_id: dataSourceId },
-      properties: recipeToNotionProperties(recipe),
-    },
-  });
-  return notionPageToRecipe(out);
+  const page = await withNotionRateLimitRetry(
+    () =>
+      notion.pages.create({
+        parent: { data_source_id: dataSourceId },
+        properties: recipeToNotionProperties(recipe),
+      }),
+    { action: 'createRecipePage', dataSourceId, recipeId: recipe.id }
+  );
+  return notionPageToRecipe(page);
 };
 
 export const updateRecipePage = async (notionPageId, recipe) => {
-  const out = await notionFetch(`/pages/${notionPageId}`, {
-    method: 'PATCH',
-    body: {
-      properties: recipeToNotionProperties(recipe),
-    },
-  });
-  return notionPageToRecipe(out);
+  const notion = getNotionClient();
+  const page = await withNotionRateLimitRetry(
+    () =>
+      notion.pages.update({
+        page_id: notionPageId,
+        properties: recipeToNotionProperties(recipe),
+        in_trash: false,
+      }),
+    { action: 'updateRecipePage', notionPageId, recipeId: recipe.id }
+  );
+  return notionPageToRecipe(page);
+};
+
+export const archiveRecipePage = async (notionPageId) => {
+  const notion = getNotionClient();
+  await withNotionRateLimitRetry(
+    () =>
+      notion.pages.update({
+        page_id: notionPageId,
+        in_trash: true,
+      }),
+    { action: 'archiveRecipePage', notionPageId }
+  );
 };

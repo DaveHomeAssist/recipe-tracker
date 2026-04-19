@@ -33,11 +33,22 @@ const toRating = (v) => {
   return Math.round(n);
 };
 
+const toVersion = (v) => {
+  const n = Number(v);
+  if (!Number.isFinite(n) || n < 0) return 0;
+  return Math.floor(n);
+};
+
 export const validateRecipe = (raw) => {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
 
   const name = toStr(raw.name).trim();
   if (!name) return null; // name is the one hard requirement
+  const canonicalInstructions = raw.instructions ?? raw.method;
+  const canonicalPrepTime = raw.preptime ?? raw.prepTime;
+  const canonicalCookTime = raw.cooktime ?? raw.cookTime;
+  const canonicalUrl = raw.sourceUrl ?? raw.url;
+  const canonicalDate = raw.date ?? raw.dateTried;
 
   return {
     id: toId(raw.id),
@@ -46,16 +57,17 @@ export const validateRecipe = (raw) => {
     source: toStr(raw.source).trim(),
     location: toStr(raw.location).trim(),
     ingredients: toStr(raw.ingredients),
-    instructions: toStr(raw.instructions),
-    preptime: toStr(raw.preptime).trim(),
-    cooktime: toStr(raw.cooktime).trim(),
+    instructions: toStr(canonicalInstructions),
+    preptime: toStr(canonicalPrepTime).trim(),
+    cooktime: toStr(canonicalCookTime).trim(),
     servings: toStr(raw.servings).trim(),
     tags: splitTagLabels(raw.tags),
     notes: toStr(raw.notes),
-    url: safeUrl(raw.url),
+    url: safeUrl(canonicalUrl),
     image: safeUrl(raw.image),
-    date: toStr(raw.date).trim(),
+    date: toStr(canonicalDate).trim(),
     rating: toRating(raw.rating),
+    version: toVersion(raw.version),
   };
 };
 

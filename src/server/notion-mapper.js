@@ -19,17 +19,37 @@ const joinText = (items = []) =>
 
 const richText = (value) => ({ rich_text: textChunks(value) });
 const title = (value) => ({ title: textChunks(value) });
-
-const select = (value) => ({ select: value ? { name: String(value) } : null });
 const url = (value) => ({ url: value || null });
 const number = (value) => ({ number: Number.isFinite(Number(value)) ? Number(value) : 0 });
-const checkbox = (value) => ({ checkbox: Boolean(value) });
 const date = (value) => ({ date: value ? { start: value } : null });
+const files = (value, name = 'Recipe photo') => {
+  const cleanValue = String(value || '').trim();
+  if (!cleanValue) return { files: [] };
+  return {
+    files: [
+      {
+        name,
+        external: {
+          url: cleanValue,
+        },
+      },
+    ],
+  };
+};
+
+const readFiles = (value = {}) => {
+  const firstFile = Array.isArray(value?.files) ? value.files[0] : null;
+  if (!firstFile) return '';
+  if (firstFile.type === 'external') return firstFile.external?.url || '';
+  if (firstFile.type === 'file') return firstFile.file?.url || '';
+  if (firstFile.type === 'file_upload') return firstFile.file_upload?.url || '';
+  return '';
+};
 
 export const recipeToNotionProperties = (recipe) => ({
   'App ID': richText(recipe.id),
-  Name: title(recipe.name),
-  Cuisine: select(recipe.cuisine),
+  'Recipe Name': title(recipe.name),
+  Cuisine: richText(recipe.cuisine),
   Source: richText(recipe.source),
   Location: richText(recipe.location),
   'Prep Time': richText(recipe.preptime),
@@ -37,14 +57,13 @@ export const recipeToNotionProperties = (recipe) => ({
   Servings: richText(recipe.servings),
   Tags: richText(recipe.tags),
   'Source URL': url(recipe.url),
-  'Image URL': url(recipe.image),
+  Photos: files(recipe.image, recipe.name || 'Recipe photo'),
   'Date Tried': date(recipe.date),
   Rating: number(recipe.rating),
   Notes: richText(recipe.notes),
   Ingredients: richText(recipe.ingredients),
-  Instructions: richText(recipe.instructions),
+  Steps: richText(recipe.instructions),
   Version: number(recipe.version || 1),
-  Deleted: checkbox(Boolean(recipe.deleted)),
   'Last Synced At': date(new Date().toISOString()),
 });
 
@@ -53,8 +72,8 @@ export const notionPageToRecipe = (page) => {
   return {
     id: joinText(props['App ID']?.rich_text),
     notionPageId: page.id,
-    name: joinText(props.Name?.title),
-    cuisine: props.Cuisine?.select?.name || '',
+    name: joinText(props['Recipe Name']?.title),
+    cuisine: joinText(props.Cuisine?.rich_text || props.Cuisine?.text),
     source: joinText(props.Source?.rich_text),
     location: joinText(props.Location?.rich_text),
     preptime: joinText(props['Prep Time']?.rich_text),
@@ -62,14 +81,13 @@ export const notionPageToRecipe = (page) => {
     servings: joinText(props.Servings?.rich_text),
     tags: joinText(props.Tags?.rich_text),
     url: props['Source URL']?.url || '',
-    image: props['Image URL']?.url || '',
+    image: readFiles(props.Photos),
     date: props['Date Tried']?.date?.start || '',
     rating: Number(props.Rating?.number || 0),
     notes: joinText(props.Notes?.rich_text),
     ingredients: joinText(props.Ingredients?.rich_text),
-    instructions: joinText(props.Instructions?.rich_text),
+    instructions: joinText(props.Steps?.rich_text),
     version: Number(props.Version?.number || 1),
-    deleted: Boolean(props.Deleted?.checkbox),
   };
 };
 
@@ -78,7 +96,4 @@ export const appIdFilter = (id) => ({
   rich_text: { equals: id },
 });
 
-export const activeRecipesFilter = {
-  property: 'Deleted',
-  checkbox: { equals: false },
-};
+export const activeRecipesFilter = null;

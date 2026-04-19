@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseAllowedOrigins, isOriginAllowed, applyCors, rejectDisallowedOrigin } from '../../src/server/http.js';
+import { parseAllowedOrigins, isOriginAllowed, isSameOriginRequest, applyCors, rejectDisallowedOrigin } from '../../src/server/http.js';
 
 describe('parseAllowedOrigins', () => {
   it('splits a comma-separated list and trims whitespace', () => {
@@ -46,10 +46,38 @@ describe('isOriginAllowed', () => {
   it('rejects everything when the allowlist is empty', () => {
     expect(isOriginAllowed('https://a.example.com', new Set())).toBe(false);
   });
+
+  it('accepts same-origin requests even when the origin is not in the explicit allowlist', () => {
+    expect(
+      isOriginAllowed('http://127.0.0.1:4010', allowed, {
+        headers: { host: '127.0.0.1:4010' },
+      })
+    ).toBe(true);
+  });
+});
+
+describe('isSameOriginRequest', () => {
+  it('detects localhost same-origin requests', () => {
+    expect(
+      isSameOriginRequest(
+        { headers: { host: '127.0.0.1:4010' } },
+        'http://127.0.0.1:4010'
+      )
+    ).toBe(true);
+  });
+
+  it('rejects different hosts', () => {
+    expect(
+      isSameOriginRequest(
+        { headers: { host: '127.0.0.1:4010' } },
+        'http://127.0.0.1:4020'
+      )
+    ).toBe(false);
+  });
 });
 
 describe('applyCors', () => {
-  const makeReq = (origin) => ({ headers: origin ? { origin } : {} });
+  const makeReq = (origin, host) => ({ headers: { ...(origin ? { origin } : {}), ...(host ? { host } : {}) } });
   const makeRes = () => {
     const headers = {};
     return {
@@ -64,7 +92,7 @@ describe('applyCors', () => {
     const res = makeRes();
     applyCors(req, res);
     expect(res.headers['Access-Control-Allow-Origin']).toBe('https://b.example.com');
-    expect(res.headers['Access-Control-Allow-Headers']).toBe('Authorization, Content-Type');
+    expect(res.headers['Access-Control-Allow-Headers']).toBe('Authorization, Content-Type, X-Family-Code, x-family-code');
     expect(res.headers['Vary']).toBe('Origin');
   });
 
@@ -74,6 +102,14 @@ describe('applyCors', () => {
     const res = makeRes();
     applyCors(req, res);
     expect(res.headers['Access-Control-Allow-Origin']).toBeUndefined();
+  });
+
+  it('reflects same-origin localhost requests for dev without widening cross-origin access', () => {
+    process.env.ALLOWED_ORIGINS = 'https://davehomeassist.github.io';
+    const req = makeReq('http://127.0.0.1:4010', '127.0.0.1:4010');
+    const res = makeRes();
+    applyCors(req, res);
+    expect(res.headers['Access-Control-Allow-Origin']).toBe('http://127.0.0.1:4010');
   });
 
   it('emits nothing when ALLOWED_ORIGINS is unset', () => {
@@ -97,7 +133,11 @@ describe('applyCors', () => {
 });
 
 describe('rejectDisallowedOrigin', () => {
-  const makeReq = (origin) => ({ method: 'GET', url: '/api/test', headers: origin ? { origin } : {} });
+  const makeReq = (origin, host) => ({
+    method: 'GET',
+    url: '/api/test',
+    headers: { ...(origin ? { origin } : {}), ...(host ? { host } : {}) },
+  });
   const makeRes = () => {
     const headers = {};
     return {
@@ -129,5 +169,13 @@ describe('rejectDisallowedOrigin', () => {
     expect(rejectDisallowedOrigin(req, res)).toBe(true);
     expect(res.statusCode).toBe(403);
     expect(JSON.parse(res.body).error.code).toBe('CORS_FORBIDDEN');
+  });
+
+  it('does not reject same-origin localhost requests', () => {
+    process.env.ALLOWED_ORIGINS = 'https://davehomeassist.github.io';
+    const req = makeReq('http://127.0.0.1:4010', '127.0.0.1:4010');
+    const res = makeRes();
+    expect(rejectDisallowedOrigin(req, res)).toBe(false);
+    expect(res.statusCode).toBe(200);
   });
 });

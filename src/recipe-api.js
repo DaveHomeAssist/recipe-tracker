@@ -10,19 +10,29 @@ class ApiError extends Error {
 
 const trimTrailingSlash = (value) => String(value || '').replace(/\/+$/, '');
 
-export const createRecipeApi = ({ baseUrl = '/api/v1', getSessionToken = () => null, onUnauthorized = () => {} } = {}) => {
+export const createRecipeApi = ({ baseUrl = '/api', getFamilyCode = () => '', onUnauthorized = () => {} } = {}) => {
   const root = trimTrailingSlash(baseUrl);
 
   const request = async (path, options = {}) => {
-    const token = getSessionToken();
-    const response = await fetch(`${root}${path}`, {
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        ...(options.headers || {}),
-      },
-      ...options,
-    });
+    const familyCode = String(options.familyCode ?? getFamilyCode() ?? '').trim();
+
+    let response;
+    try {
+      response = await fetch(`${root}${path}`, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(familyCode ? { 'x-family-code': familyCode } : {}),
+          ...(options.headers || {}),
+        },
+        ...options,
+      });
+    } catch (error) {
+      throw new ApiError('Network request failed', {
+        status: 0,
+        code: 'NETWORK_ERROR',
+        details: [{ message: error.message }],
+      });
+    }
 
     if (response.status === 204) return null;
 
@@ -39,16 +49,18 @@ export const createRecipeApi = ({ baseUrl = '/api/v1', getSessionToken = () => n
   };
 
   return {
-    getSession: () => request('/session'),
-    createSession: (accessCode) =>
-      request('/session', {
-        method: 'POST',
-        body: JSON.stringify({ accessCode }),
+    verifyAccessCode: (familyCode) =>
+      request('/health', {
+        method: 'GET',
+        familyCode,
       }),
-    clearSession: () => request('/session', { method: 'DELETE' }),
     getRecipes: async () => {
       const payload = await request('/recipes');
       return payload.data || [];
+    },
+    getRecipe: async (id) => {
+      const payload = await request(`/recipes/${encodeURIComponent(id)}`);
+      return payload.data?.recipe || null;
     },
     createRecipe: async (recipe) => {
       const payload = await request('/recipes', {
@@ -69,10 +81,10 @@ export const createRecipeApi = ({ baseUrl = '/api/v1', getSessionToken = () => n
         method: 'DELETE',
         body: JSON.stringify({ version }),
       }),
-    importRecipes: (mode, payload, replaceConfirmed = false) =>
-      request('/import', {
+    syncRecipes: (payload) =>
+      request('/recipes/sync', {
         method: 'POST',
-        body: JSON.stringify({ mode, payload, replaceConfirmed }),
+        body: JSON.stringify({ payload }),
       }),
     health: () => request('/health'),
   };
