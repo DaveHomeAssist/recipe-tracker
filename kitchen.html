@@ -1,0 +1,685 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#b8895f">
+<title>Kitchen · Recipe Journal</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<style>
+  :root {
+    --bg: #fff8f1;
+    --surface: #fff;
+    --border: #e9d8c4;
+    --text: #3a2b1a;
+    --muted: #8a7661;
+    --accent: #b8895f;
+    --accent-dk: #8d6241;
+    --success: #4a7c3c;
+    --danger: #b04a3a;
+    --chip: #f4e6d2;
+    --aisle-Produce: #5fa05a;
+    --aisle-Dairy: #d7a855;
+    --aisle-Meat: #b04a3a;
+    --aisle-Pantry: #8a7661;
+    --aisle-Frozen: #6a9bc9;
+    --aisle-Other: #a87b58;
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font-family: 'Lato', -apple-system, system-ui, sans-serif; line-height: 1.5; }
+  a { color: var(--accent-dk); }
+  .layout { max-width: 1100px; margin: 0 auto; padding: 18px 16px 80px; }
+  header.page { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 14px; }
+  h1 { margin: 0; font-family: 'Playfair Display', Georgia, serif; font-size: 26px; letter-spacing: -0.01em; }
+  h2 { margin: 18px 0 10px; font-family: 'Playfair Display', Georgia, serif; font-size: 19px; }
+  h3 { margin: 14px 0 6px; font-size: 14px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+  .back { font-size: 13px; color: var(--muted); text-decoration: none; }
+  .back:hover { color: var(--accent-dk); }
+
+  nav.tabs { display: flex; gap: 4px; background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 4px; overflow: auto; }
+  nav.tabs button { flex: 1; min-width: 0; padding: 8px 14px; border: 0; background: transparent; color: var(--text); font-size: 14px; font-weight: 500; border-radius: 999px; cursor: pointer; font-family: inherit; white-space: nowrap; }
+  nav.tabs button.active { background: var(--accent); color: #fff; }
+  nav.tabs button:hover:not(.active) { background: var(--chip); }
+
+  .panel { display: none; margin-top: 16px; }
+  .panel.active { display: block; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 14px; }
+
+  /* Plan grid */
+  .plan-grid { display: grid; grid-template-columns: 60px repeat(7, 1fr); gap: 6px; font-size: 13px; }
+  .plan-header { font-weight: 600; text-align: center; padding: 6px 4px; color: var(--muted); text-transform: uppercase; font-size: 11px; letter-spacing: 0.04em; }
+  .plan-slot { background: var(--surface); border: 1px dashed var(--border); border-radius: 6px; padding: 6px 4px; min-height: 54px; display: flex; flex-direction: column; gap: 3px; cursor: pointer; transition: border-color 0.15s, background 0.15s; }
+  .plan-slot:hover { border-color: var(--accent); border-style: solid; background: #fffdf8; }
+  .plan-slot-label { font-size: 10px; color: var(--muted); text-transform: uppercase; }
+  .plan-entry { background: var(--chip); border-radius: 4px; padding: 3px 5px; font-size: 11px; line-height: 1.3; }
+  .plan-entry .rm { float: right; cursor: pointer; color: var(--muted); font-weight: 700; margin-left: 4px; }
+  .plan-entry .rm:hover { color: var(--danger); }
+
+  /* Shop list */
+  .shop-aisle { margin-bottom: 16px; }
+  .aisle-tag { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 999px; color: #fff; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase; }
+  .shop-item { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid #f3ead8; }
+  .shop-item.checked .shop-label { text-decoration: line-through; color: var(--muted); }
+  .shop-item input[type="checkbox"] { width: 18px; height: 18px; flex-shrink: 0; accent-color: var(--accent); }
+  .shop-label { flex: 1; }
+  .shop-label .qty { font-weight: 600; margin-right: 6px; }
+  .shop-label .mod { color: var(--muted); font-size: 12px; margin-left: 6px; }
+  .shop-drop { font-size: 12px; color: var(--muted); cursor: pointer; padding: 2px 6px; border-radius: 4px; }
+  .shop-drop:hover { color: var(--danger); background: #fdf3f0; }
+
+  /* Pantry */
+  .pantry-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 6px; }
+  .pantry-pill { background: var(--chip); padding: 6px 10px; border-radius: 999px; display: flex; justify-content: space-between; align-items: center; font-size: 13px; }
+  .pantry-pill .x { cursor: pointer; color: var(--muted); margin-left: 8px; font-weight: 700; }
+  .pantry-pill .x:hover { color: var(--danger); }
+  .pantry-add { display: flex; gap: 8px; margin-bottom: 10px; }
+  .pantry-add input { flex: 1; padding: 8px 12px; border: 1px solid var(--border); border-radius: 999px; font-size: 14px; font-family: inherit; background: var(--surface); color: var(--text); }
+  .pantry-add input:focus { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+  /* Recipe rankings (cook-what-I-have) */
+  .rank-list { display: grid; gap: 6px; }
+  .rank-row { display: flex; align-items: center; gap: 10px; padding: 8px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; }
+  .rank-name { flex: 1; font-weight: 500; }
+  .rank-bar { width: 80px; height: 6px; background: #f3ead8; border-radius: 3px; overflow: hidden; }
+  .rank-bar-fill { height: 100%; background: var(--success); transition: width 0.3s; }
+  .rank-pct { font-family: ui-monospace, monospace; font-size: 12px; min-width: 40px; text-align: right; color: var(--muted); }
+  .rank-missing { font-size: 11px; color: var(--muted); max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* Buttons + generic */
+  .btn { border: 1px solid var(--accent); background: var(--accent); color: #fff; padding: 8px 14px; border-radius: 999px; font-size: 13px; cursor: pointer; font-family: inherit; font-weight: 500; }
+  .btn:hover { background: var(--accent-dk); border-color: var(--accent-dk); }
+  .btn.ghost { background: transparent; color: var(--accent-dk); }
+  .btn.ghost:hover { background: var(--chip); }
+  .btn.small { padding: 4px 10px; font-size: 12px; }
+  .btn.danger { background: var(--danger); border-color: var(--danger); }
+  .btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+
+  .muted { color: var(--muted); font-size: 13px; }
+  .empty { padding: 24px 14px; text-align: center; color: var(--muted); font-style: italic; }
+
+  /* Modal (recipe picker + cook mode) */
+  .modal-backdrop { position: fixed; inset: 0; background: rgba(58, 43, 26, 0.45); z-index: 50; display: flex; align-items: center; justify-content: center; padding: 20px; }
+  .modal { background: var(--surface); border-radius: var(--radius); max-width: 520px; width: 100%; max-height: 85vh; overflow: auto; padding: 20px; border: 1px solid var(--border); }
+  .modal h3 { margin-top: 0; color: var(--text); text-transform: none; letter-spacing: normal; font-size: 18px; font-weight: 600; }
+  .modal-close { float: right; background: transparent; border: 0; font-size: 22px; cursor: pointer; color: var(--muted); line-height: 1; }
+  .modal-close:hover { color: var(--danger); }
+  .recipe-search { width: 100%; padding: 10px 14px; border: 1px solid var(--border); border-radius: 999px; font-size: 14px; font-family: inherit; margin-bottom: 12px; background: var(--bg); }
+  .recipe-list { max-height: 400px; overflow: auto; }
+  .recipe-row { padding: 8px 10px; border-bottom: 1px solid #f3ead8; cursor: pointer; display: flex; align-items: center; gap: 10px; }
+  .recipe-row:hover { background: var(--chip); }
+  .recipe-row img { width: 36px; height: 36px; object-fit: cover; border-radius: 4px; flex-shrink: 0; background: var(--chip); }
+  .recipe-row .name { flex: 1; font-size: 14px; }
+  .recipe-row .cuisine { font-size: 11px; color: var(--muted); background: var(--chip); padding: 2px 6px; border-radius: 4px; }
+
+  /* Cook Mode overlay */
+  .cook-overlay { position: fixed; inset: 0; background: var(--bg); z-index: 100; overflow: auto; padding: 20px; }
+  .cook-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; gap: 12px; }
+  .cook-head h2 { margin: 0; font-size: 22px; }
+  .cook-body { display: grid; grid-template-columns: minmax(240px, 1fr) 2fr; gap: 20px; max-width: 1000px; }
+  @media (max-width: 700px) { .cook-body { grid-template-columns: 1fr; } }
+  .cook-ings { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; align-self: start; position: sticky; top: 10px; }
+  .cook-ings ul { list-style: none; padding: 0; margin: 0; }
+  .cook-ings li { display: flex; gap: 8px; padding: 6px 0; border-bottom: 1px solid #f3ead8; cursor: pointer; font-size: 15px; }
+  .cook-ings li.checked { color: var(--muted); text-decoration: line-through; }
+  .cook-ings li input { accent-color: var(--accent); }
+  .cook-steps { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; font-size: 17px; line-height: 1.7; }
+  .cook-step { padding: 14px 0; border-bottom: 1px solid #f3ead8; display: flex; gap: 14px; align-items: flex-start; }
+  .cook-step:last-child { border-bottom: 0; }
+  .cook-step-num { width: 32px; height: 32px; border-radius: 50%; background: var(--chip); display: flex; align-items: center; justify-content: center; font-weight: 700; flex-shrink: 0; color: var(--muted); }
+  .cook-step.active .cook-step-num { background: var(--accent); color: #fff; }
+  .cook-step.done { opacity: 0.55; }
+  .cook-step.done .cook-step-num { background: var(--success); color: #fff; }
+  .cook-step .done-btn { font-size: 12px; color: var(--muted); cursor: pointer; padding: 2px 8px; border-radius: 4px; }
+  .cook-step .done-btn:hover { color: var(--success); background: #f0f6ec; }
+  .timer-chip { display: inline-block; background: var(--chip); color: var(--accent-dk); padding: 2px 10px; border-radius: 999px; font-size: 15px; cursor: pointer; font-weight: 600; margin: 0 2px; border: 1px dashed var(--accent); }
+  .timer-chip.active { background: var(--accent); color: #fff; animation: pulse 1s infinite; }
+  @keyframes pulse { 50% { opacity: 0.7; } }
+  .timer-bar { position: fixed; bottom: 0; left: 0; right: 0; background: var(--accent-dk); color: #fff; padding: 8px 16px; display: none; justify-content: space-between; align-items: center; font-variant-numeric: tabular-nums; }
+  .timer-bar.show { display: flex; }
+
+  .flash { background: #f0f6ec; border-left: 3px solid var(--success); padding: 8px 12px; margin: 10px 0; border-radius: 4px; font-size: 13px; animation: fadein 0.2s; }
+  @keyframes fadein { from { opacity: 0; transform: translateY(-4px); } }
+</style>
+</head>
+<body>
+<div class="layout">
+
+<header class="page">
+  <div>
+    <h1>🍳 Kitchen</h1>
+    <a class="back" href="./index.html">← back to recipes</a>
+  </div>
+  <nav class="tabs">
+    <button data-tab="plan" class="active">Plan</button>
+    <button data-tab="shop">Shop</button>
+    <button data-tab="pantry">Pantry</button>
+    <button data-tab="cook">Cook</button>
+  </nav>
+</header>
+
+<section id="panel-plan" class="panel active">
+  <div class="card">
+    <h2>This week</h2>
+    <div class="muted" id="plan-week-label"></div>
+    <div class="btn-row">
+      <button class="btn" id="shop-this-week">Shop for this week →</button>
+      <button class="btn ghost" id="clear-plan">Clear all</button>
+    </div>
+    <div class="plan-grid" id="plan-grid"></div>
+    <p class="muted" style="margin-top:10px;font-size:12px">Tap a slot to add a recipe.</p>
+  </div>
+</section>
+
+<section id="panel-shop" class="panel">
+  <div class="card">
+    <h2>Shopping list</h2>
+    <div class="btn-row">
+      <button class="btn" id="gen-from-plan">Regenerate from this week</button>
+      <button class="btn ghost" id="pantry-from-checked">Check received → Pantry</button>
+      <button class="btn ghost" id="clear-shop">Clear unchecked</button>
+    </div>
+    <div id="shop-list"></div>
+  </div>
+</section>
+
+<section id="panel-pantry" class="panel">
+  <div class="card">
+    <h2>Pantry</h2>
+    <div class="pantry-add">
+      <input type="text" id="pantry-input" placeholder="Add an ingredient… (e.g. flour, onion, chicken)" list="pantry-suggest">
+      <datalist id="pantry-suggest"></datalist>
+      <button class="btn" id="pantry-add-btn">Add</button>
+    </div>
+    <div class="pantry-list" id="pantry-items"></div>
+  </div>
+  <div class="card">
+    <h2>Cook what you have</h2>
+    <p class="muted">Your recipes ranked by how much of their ingredients are in the pantry right now.</p>
+    <div class="rank-list" id="rank-list"></div>
+  </div>
+</section>
+
+<section id="panel-cook" class="panel">
+  <div class="card">
+    <h2>Cook Mode</h2>
+    <p class="muted">Pick a recipe and cook with a full-screen step overlay. Tap any <span class="timer-chip" style="cursor:default">duration</span> inside a step to start a timer.</p>
+    <button class="btn" id="pick-cook">Pick a recipe to cook →</button>
+  </div>
+  <div class="card">
+    <h2>Recent cook sessions</h2>
+    <div id="cook-log" class="muted">No sessions logged yet.</div>
+  </div>
+</section>
+
+<div id="modal-root"></div>
+<div class="timer-bar" id="timer-bar"><span id="timer-bar-label">Timer</span><span id="timer-bar-rem">00:00</span></div>
+
+</div>
+
+<script type="module">
+// Data layer imports
+import { parseIngredient, parseIngredients } from './src/ingredient-parser.js';
+import { formatQty, scaleQty } from './src/unit-normalize.js';
+import * as Plan from './src/meal-plan.js';
+import * as Shop from './src/shopping-list.js';
+import * as Pantry from './src/pantry.js';
+import * as Cook from './src/cook-mode.js';
+import { tokenizeWithTimers, parseDurations, startTimer, cancelTimer, activeTimerIds, timerRemaining, onTimerEvent, acquireWakeLock, releaseWakeLock } from './src/cook-timer.js';
+
+// ---- Aisle map ----
+let AISLE = {};
+try {
+  const res = await fetch('./src/aisle-map.json');
+  AISLE = await res.json();
+  delete AISLE._comment;
+} catch (e) { console.warn('aisle map load failed', e); }
+
+// ---- Load existing recipes from the main app ----
+const RECIPE_KEY = 'recipe_journal_v3';
+function loadRecipes() {
+  try {
+    const raw = localStorage.getItem(RECIPE_KEY);
+    const arr = raw ? JSON.parse(raw) : [];
+    return Array.isArray(arr) ? arr : [];
+  } catch { return []; }
+}
+let recipes = loadRecipes();
+const byId = (id) => recipes.find((r) => String(r.id) === String(id));
+
+// ---- State ----
+let plan = Plan.loadPlan();
+let shopList = Shop.loadList();
+let pantry = Pantry.loadPantry();
+
+// ---- Tabs ----
+document.querySelectorAll('nav.tabs button').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('nav.tabs button').forEach((b) => b.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach((p) => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
+    if (btn.dataset.tab === 'shop') renderShop();
+    if (btn.dataset.tab === 'pantry') renderPantry();
+    if (btn.dataset.tab === 'cook') renderCookLog();
+  });
+});
+
+// ---- Week date math ----
+function mondayOf(date) {
+  const d = new Date(date);
+  const day = d.getDay() || 7;
+  d.setDate(d.getDate() - (day - 1));
+  return d;
+}
+function isoDate(d) { return d.toISOString().slice(0, 10); }
+function weekDates() {
+  const m = mondayOf(new Date());
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(m);
+    d.setDate(m.getDate() + i);
+    return isoDate(d);
+  });
+}
+const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const SLOTS = [['b', 'Breakfast'], ['l', 'Lunch'], ['d', 'Dinner']];
+
+// ---- PLAN view ----
+function renderPlan() {
+  const week = weekDates();
+  const m = new Date(week[0]); const s = new Date(week[6]);
+  const fmt = (d) => d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  document.getElementById('plan-week-label').textContent = `${fmt(m)} – ${fmt(s)}`;
+
+  const grid = document.getElementById('plan-grid');
+  grid.innerHTML = '';
+  grid.appendChild(cell('plan-header', ''));
+  for (const day of DAY_LABELS) grid.appendChild(cell('plan-header', day));
+  for (const [slot, label] of SLOTS) {
+    grid.appendChild(cell('plan-header', label));
+    for (let i = 0; i < 7; i++) {
+      const date = week[i];
+      const slotEl = document.createElement('div');
+      slotEl.className = 'plan-slot';
+      slotEl.innerHTML = `<div class="plan-slot-label">${label[0]}</div>`;
+      const entries = Plan.entriesFor(plan, date, slot);
+      for (const e of entries) {
+        const r = byId(e.recipeId);
+        const name = r ? r.name : '(recipe removed)';
+        const chip = document.createElement('div');
+        chip.className = 'plan-entry';
+        chip.innerHTML = `<span class="rm" title="remove">✕</span>${escapeHtml(name.slice(0, 22))}${name.length > 22 ? '…' : ''}`;
+        chip.querySelector('.rm').addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          plan = Plan.removeEntry(plan, e.id);
+          Plan.savePlan(plan);
+          renderPlan();
+        });
+        slotEl.appendChild(chip);
+      }
+      slotEl.addEventListener('click', () => {
+        openRecipePicker((recipe) => {
+          plan = Plan.addEntry(plan, { date, slot, recipeId: String(recipe.id) });
+          Plan.savePlan(plan);
+          renderPlan();
+        });
+      });
+      grid.appendChild(slotEl);
+    }
+  }
+}
+function cell(cls, text) {
+  const d = document.createElement('div');
+  d.className = cls;
+  d.textContent = text;
+  return d;
+}
+
+document.getElementById('shop-this-week').addEventListener('click', () => {
+  const week = weekDates();
+  const entries = Plan.entriesInRange(plan, week[0], week[6]);
+  if (!entries.length) { flash('Plan is empty for this week — nothing to shop.'); return; }
+  const sources = entries
+    .map((e) => ({ recipe: byId(e.recipeId), servingsFactor: 1 }))
+    .filter((s) => s.recipe);
+  const fresh = Shop.generateFromRecipes(sources, AISLE);
+  const merged = Shop.mergeWithExisting(fresh, shopList);
+  shopList = Shop.saveList(merged);
+  document.querySelector('nav.tabs button[data-tab="shop"]').click();
+});
+
+document.getElementById('clear-plan').addEventListener('click', () => {
+  if (!confirm('Clear entire meal plan?')) return;
+  plan = { version: 1, entries: [] };
+  Plan.savePlan(plan);
+  renderPlan();
+});
+
+// ---- SHOP view ----
+function renderShop() {
+  const container = document.getElementById('shop-list');
+  container.innerHTML = '';
+  if (!shopList.items?.length) {
+    container.innerHTML = '<div class="empty">No items yet. Plan some meals and tap "Shop for this week".</div>';
+    return;
+  }
+  const grouped = Shop.groupByAisle(shopList);
+  for (const [aisle, items] of grouped) {
+    const section = document.createElement('div');
+    section.className = 'shop-aisle';
+    section.innerHTML = `<h3><span class="aisle-tag" style="background:var(--aisle-${aisle})">${aisle}</span></h3>`;
+    for (const item of items) {
+      const row = document.createElement('div');
+      row.className = 'shop-item' + (item.checked ? ' checked' : '');
+      const qty = Shop.formatItemQty(item) || (item.bareSum ? String(item.bareSum) : '');
+      const mod = item.modifiers?.length ? ` (${item.modifiers.slice(0, 2).join(', ')})` : '';
+      const src = item.sources?.length > 1 ? ` · ${item.sources.length} recipes` : '';
+      row.innerHTML = `
+        <input type="checkbox" ${item.checked ? 'checked' : ''}>
+        <div class="shop-label"><span class="qty">${escapeHtml(qty)}</span>${escapeHtml(item.displayName)}<span class="mod">${escapeHtml(mod + src)}</span></div>
+        <span class="shop-drop" title="remove">✕</span>
+      `;
+      row.querySelector('input').addEventListener('change', () => {
+        shopList = Shop.toggleItem(shopList, item.slug);
+        Shop.saveList(shopList);
+        renderShop();
+      });
+      row.querySelector('.shop-drop').addEventListener('click', () => {
+        shopList = Shop.removeItem(shopList, item.slug);
+        Shop.saveList(shopList);
+        renderShop();
+      });
+      section.appendChild(row);
+    }
+    container.appendChild(section);
+  }
+}
+document.getElementById('gen-from-plan').addEventListener('click', () => {
+  const week = weekDates();
+  const entries = Plan.entriesInRange(plan, week[0], week[6]);
+  const sources = entries.map((e) => ({ recipe: byId(e.recipeId), servingsFactor: 1 })).filter((s) => s.recipe);
+  const fresh = Shop.generateFromRecipes(sources, AISLE);
+  const merged = Shop.mergeWithExisting(fresh, shopList);
+  shopList = Shop.saveList(merged);
+  renderShop();
+  flash('Regenerated from this week\'s plan.');
+});
+document.getElementById('pantry-from-checked').addEventListener('click', () => {
+  const checked = (shopList.items || []).filter((i) => i.checked).map((i) => i.slug).filter((s) => !s.startsWith('raw:'));
+  if (!checked.length) { flash('No checked items to add.'); return; }
+  pantry = Pantry.addMany(pantry, checked);
+  Pantry.savePantry(pantry);
+  flash(`Added ${checked.length} item${checked.length === 1 ? '' : 's'} to pantry.`);
+});
+document.getElementById('clear-shop').addEventListener('click', () => {
+  if (!confirm('Remove all unchecked items?')) return;
+  shopList = { ...shopList, items: shopList.items.filter((i) => i.checked) };
+  Shop.saveList(shopList);
+  renderShop();
+});
+
+// ---- PANTRY view ----
+function renderPantry() {
+  const list = document.getElementById('pantry-items');
+  list.innerHTML = '';
+  if (!pantry.items?.length) {
+    list.innerHTML = '<div class="empty" style="grid-column:1/-1">Pantry empty. Add some staples above.</div>';
+  } else {
+    for (const it of pantry.items) {
+      const pill = document.createElement('div');
+      pill.className = 'pantry-pill';
+      pill.innerHTML = `<span>${escapeHtml(it.displayName)}</span><span class="x" title="remove">✕</span>`;
+      pill.querySelector('.x').addEventListener('click', () => {
+        pantry = Pantry.removeItem(pantry, it.slug);
+        Pantry.savePantry(pantry);
+        renderPantry();
+      });
+      list.appendChild(pill);
+    }
+  }
+  // Suggest typeahead from aisle map keys
+  const suggest = document.getElementById('pantry-suggest');
+  suggest.innerHTML = Object.keys(AISLE).sort().map((k) => `<option value="${k}">`).join('');
+
+  // Render ranked recipes
+  const rank = document.getElementById('rank-list');
+  if (!recipes.length) { rank.innerHTML = '<div class="empty">No recipes in localStorage. Open the main page first so recipes sync.</div>'; return; }
+  const ranked = Pantry.rankRecipesByCoverage(recipes, pantry).slice(0, 40);
+  rank.innerHTML = '';
+  for (const r of ranked) {
+    const row = document.createElement('div');
+    row.className = 'rank-row';
+    const pct = Math.round(r.coverage * 100);
+    const missing = r.missing.slice(0, 3).join(', ') + (r.missing.length > 3 ? ` +${r.missing.length - 3}` : '');
+    row.innerHTML = `
+      <span class="rank-name">${escapeHtml(r.recipe.name || '(untitled)')}</span>
+      <div class="rank-bar"><div class="rank-bar-fill" style="width:${pct}%"></div></div>
+      <span class="rank-pct">${r.matched}/${r.total}</span>
+      <span class="rank-missing" title="${escapeHtml(r.missing.join(', '))}">${r.missing.length ? 'need: ' + escapeHtml(missing) : 'all in pantry ✓'}</span>
+      <button class="btn small ghost" data-rid="${r.recipe.id}">Cook</button>
+    `;
+    row.querySelector('button').addEventListener('click', () => openCookMode(r.recipe));
+    rank.appendChild(row);
+  }
+}
+document.getElementById('pantry-add-btn').addEventListener('click', addPantryItem);
+document.getElementById('pantry-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') addPantryItem(); });
+function addPantryItem() {
+  const input = document.getElementById('pantry-input');
+  const val = input.value.trim().toLowerCase();
+  if (!val) return;
+  pantry = Pantry.addItem(pantry, { slug: val });
+  Pantry.savePantry(pantry);
+  input.value = '';
+  renderPantry();
+}
+
+// ---- Recipe picker modal ----
+function openRecipePicker(onPick) {
+  const root = document.getElementById('modal-root');
+  root.innerHTML = '';
+  const backdrop = document.createElement('div');
+  backdrop.className = 'modal-backdrop';
+  const modal = document.createElement('div');
+  modal.className = 'modal';
+  modal.innerHTML = `
+    <button class="modal-close">×</button>
+    <h3>Pick a recipe</h3>
+    <input class="recipe-search" placeholder="Search ${recipes.length} recipes…" autofocus>
+    <div class="recipe-list"></div>
+  `;
+  backdrop.appendChild(modal);
+  root.appendChild(backdrop);
+  const list = modal.querySelector('.recipe-list');
+  const input = modal.querySelector('.recipe-search');
+  function render(q = '') {
+    const qq = q.toLowerCase();
+    const matches = recipes
+      .filter((r) => !q || (r.name || '').toLowerCase().includes(qq) || (r.cuisine || '').toLowerCase().includes(qq) || (r.tags || '').toLowerCase().includes(qq))
+      .slice(0, 80);
+    list.innerHTML = matches.map((r) => `
+      <div class="recipe-row" data-id="${r.id}">
+        <img src="${escapeAttr(r.image || 'favicon.svg')}" onerror="this.src='favicon.svg'" alt="">
+        <span class="name">${escapeHtml(r.name || '(untitled)')}</span>
+        ${r.cuisine ? `<span class="cuisine">${escapeHtml(r.cuisine)}</span>` : ''}
+      </div>
+    `).join('');
+    list.querySelectorAll('.recipe-row').forEach((row) => {
+      row.addEventListener('click', () => {
+        const r = byId(row.dataset.id);
+        if (r) onPick(r);
+        closeModal();
+      });
+    });
+  }
+  input.addEventListener('input', () => render(input.value));
+  render('');
+  modal.querySelector('.modal-close').addEventListener('click', closeModal);
+  backdrop.addEventListener('click', (e) => { if (e.target === backdrop) closeModal(); });
+  function closeModal() { root.innerHTML = ''; }
+}
+
+// ---- COOK mode overlay ----
+document.getElementById('pick-cook').addEventListener('click', () => openRecipePicker(openCookMode));
+let cookSession = null;
+let cookRenderTimers = new Map();
+
+async function openCookMode(recipe) {
+  cookSession = Cook.buildSession(recipe);
+  if (!cookSession) { flash('Could not build cook session.'); return; }
+  document.getElementById('modal-root').innerHTML = '';
+  const wrap = document.createElement('div');
+  wrap.className = 'cook-overlay';
+  wrap.innerHTML = `
+    <div class="cook-head">
+      <h2>${escapeHtml(recipe.name || 'Cook')}</h2>
+      <div>
+        <button class="btn ghost" id="cook-close">Close</button>
+      </div>
+    </div>
+    <div class="cook-body">
+      <aside class="cook-ings">
+        <h3 style="text-transform:none;margin-top:0;color:var(--text);font-size:15px">Ingredients</h3>
+        <ul id="cook-ings"></ul>
+      </aside>
+      <main class="cook-steps" id="cook-steps"></main>
+    </div>
+  `;
+  document.body.appendChild(wrap);
+  document.body.style.overflow = 'hidden';
+  document.getElementById('cook-close').addEventListener('click', closeCookMode);
+  await acquireWakeLock();
+  renderCookUI();
+}
+function closeCookMode() {
+  if (cookSession) {
+    cookSession = Cook.finishSession(cookSession);
+    Cook.logSession(cookSession);
+  }
+  cookSession = null;
+  releaseWakeLock();
+  document.querySelector('.cook-overlay')?.remove();
+  document.body.style.overflow = '';
+  renderCookLog();
+}
+function renderCookUI() {
+  if (!cookSession) return;
+  const ulIng = document.getElementById('cook-ings');
+  ulIng.innerHTML = '';
+  for (const ing of cookSession.ingredients) {
+    const li = document.createElement('li');
+    li.className = ing.checked ? 'checked' : '';
+    li.innerHTML = `<input type="checkbox" ${ing.checked ? 'checked' : ''}><span>${escapeHtml(ing.display)}</span>`;
+    li.addEventListener('click', () => {
+      cookSession = Cook.toggleIngredient(cookSession, ing.idx);
+      renderCookUI();
+    });
+    ulIng.appendChild(li);
+  }
+  const stepsEl = document.getElementById('cook-steps');
+  stepsEl.innerHTML = '';
+  if (!cookSession.steps.length) {
+    stepsEl.innerHTML = '<div class="empty">No instructions on this recipe.</div>';
+    return;
+  }
+  cookSession.steps.forEach((s, i) => {
+    const el = document.createElement('div');
+    el.className = 'cook-step ' + s.status;
+    const tokens = tokenizeWithTimers(s.text);
+    const body = document.createElement('div');
+    body.style.flex = '1';
+    for (const t of tokens) {
+      if (t.type === 'text') {
+        body.appendChild(document.createTextNode(t.value));
+      } else {
+        const chip = document.createElement('span');
+        chip.className = 'timer-chip';
+        chip.textContent = '⏱ ' + t.value;
+        chip.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          handleTimerClick(i, t);
+          chip.classList.add('active');
+        });
+        body.appendChild(chip);
+      }
+    }
+    const nm = document.createElement('div');
+    nm.className = 'cook-step-num';
+    nm.textContent = String(i + 1);
+    const doneBtn = document.createElement('span');
+    doneBtn.className = 'done-btn';
+    doneBtn.textContent = s.status === 'done' ? '✓ done' : 'mark done';
+    doneBtn.addEventListener('click', () => {
+      cookSession = Cook.markStepDone(cookSession, i);
+      renderCookUI();
+    });
+    el.appendChild(nm);
+    el.appendChild(body);
+    el.appendChild(doneBtn);
+    el.addEventListener('click', (ev) => {
+      if (ev.target.tagName !== 'SPAN' && ev.target.tagName !== 'INPUT' && !ev.target.classList.contains('done-btn')) {
+        cookSession = Cook.activateStep(cookSession, i);
+        renderCookUI();
+      }
+    });
+    stepsEl.appendChild(el);
+  });
+}
+function handleTimerClick(stepIdx, tok) {
+  const id = `step-${stepIdx}-${tok.seconds}`;
+  startTimer({ id, seconds: tok.seconds, label: `Step ${stepIdx + 1}: ${tok.value}` });
+}
+
+// Timer bar (shows remaining for any active timer)
+onTimerEvent((ev) => {
+  if (ev.type === 'started') { flash(`Timer: ${ev.label} (${Math.floor(ev.seconds / 60)}m${ev.seconds % 60 ? ' ' + (ev.seconds % 60) + 's' : ''})`); }
+  if (ev.type === 'finished') { flash(`⏰ ${ev.label}`, 6000); }
+});
+setInterval(() => {
+  const ids = activeTimerIds();
+  const bar = document.getElementById('timer-bar');
+  if (!ids.length) { bar.classList.remove('show'); return; }
+  const ms = timerRemaining(ids[0]);
+  if (ms == null) { bar.classList.remove('show'); return; }
+  const s = Math.floor(ms / 1000);
+  const mm = Math.floor(s / 60).toString().padStart(2, '0');
+  const ss = (s % 60).toString().padStart(2, '0');
+  document.getElementById('timer-bar-rem').textContent = `${mm}:${ss}`;
+  bar.classList.add('show');
+}, 500);
+
+function renderCookLog() {
+  const hist = Cook.loadSessionHistory().slice(-10).reverse();
+  const el = document.getElementById('cook-log');
+  if (!hist.length) { el.textContent = 'No sessions logged yet.'; return; }
+  el.innerHTML = hist.map((h) => {
+    const when = new Date(h.startedAt).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' });
+    const dur = h.finishedAt ? ` · ${Math.round((new Date(h.finishedAt) - new Date(h.startedAt)) / 60000)}m` : '';
+    return `<div>• ${escapeHtml(when)} — <strong>${escapeHtml(h.recipeName)}</strong> (${h.stepsCompleted}/${h.totalSteps} steps${dur})</div>`;
+  }).join('');
+}
+
+// ---- Utilities ----
+function escapeHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+}
+function escapeAttr(s) { return escapeHtml(s); }
+function flash(msg, ms = 2200) {
+  const d = document.createElement('div');
+  d.className = 'flash';
+  d.textContent = msg;
+  const parent = document.querySelector('.panel.active') || document.body;
+  parent.prepend(d);
+  setTimeout(() => d.remove(), ms);
+}
+
+// ---- Boot ----
+renderPlan();
+renderCookLog();
+if (!recipes.length) {
+  flash('No recipes found in local storage. Open the main Recipe Journal first so this page sees your library.');
+}
+
+</script>
+</body>
+</html>
