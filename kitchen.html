@@ -156,7 +156,21 @@
     <button data-tab="pantry">Pantry</button>
     <button data-tab="cook">Cook</button>
   </nav>
+  <div class="sync-strip" id="sync-strip">
+    <span class="sync-dot" id="sync-dot"></span>
+    <span class="sync-label" id="sync-label">offline</span>
+    <button class="btn small ghost" id="sync-btn" title="Sync now">↻</button>
+  </div>
 </header>
+
+<style>
+  .sync-strip { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+  .sync-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .sync-dot.synced { background: var(--success); }
+  .sync-dot.pending { background: var(--accent); animation: sync-pulse 1.2s infinite; }
+  .sync-dot.error { background: var(--danger); }
+  @keyframes sync-pulse { 50% { opacity: 0.4; } }
+</style>
 
 <section id="panel-plan" class="panel active">
   <div class="card">
@@ -226,6 +240,8 @@ import * as Shop from './src/shopping-list.js';
 import * as Pantry from './src/pantry.js';
 import * as Cook from './src/cook-mode.js';
 import { tokenizeWithTimers, parseDurations, startTimer, cancelTimer, activeTimerIds, timerRemaining, onTimerEvent, acquireWakeLock, releaseWakeLock } from './src/cook-timer.js';
+import { createStoresApi } from './src/stores-api.js';
+import { enqueuePut, pushQueue, pullAll, pendingCount, loadVersions } from './src/stores-remote.js';
 
 // ---- Aisle map ----
 let AISLE = {};
@@ -673,9 +689,123 @@ function flash(msg, ms = 2200) {
   setTimeout(() => d.remove(), ms);
 }
 
+// ---- Sync layer (Phase 4) ----
+// The main app owns the family-code / session-token contract via
+// recipe_journal_session_token_v1 in localStorage. We read it so this
+// page can piggyback the same session.
+const SESSION_TOKEN_KEY = 'recipe_journal_session_token_v1';
+const storesApi = createStoresApi({
+  baseUrl: '/api',
+  getSessionToken: () => {
+    try { return localStorage.getItem(SESSION_TOKEN_KEY) || ''; } catch { return ''; }
+  },
+  onUnauthorized: () => setSyncState('unauth', 'sign in via main app to sync'),
+});
+let syncBusy = false;
+
+function setSyncState(state, label) {
+  const dot = document.getElementById('sync-dot');
+  const lbl = document.getElementById('sync-label');
+  dot.className = 'sync-dot ' + state;
+  lbl.textContent = label || state;
+}
+
+function refreshSyncBadge() {
+  const p = pendingCount();
+  if (syncBusy) return;
+  if (p > 0) setSyncState('pending', `${p} pending`);
+}
+
+function applyStoreFromServer(store, data) {
+  if (!data || !data.payload) return;
+  if (store === 'meal_plan') {
+    plan = Plan.savePlan(data.payload);
+    renderPlan();
+  } else if (store === 'shopping_list') {
+    shopList = Shop.saveList(data.payload);
+    renderShop();
+  } else if (store === 'pantry') {
+    pantry = Pantry.savePantry(data.payload);
+    renderPantry();
+  }
+}
+
+// Resolver: union by id for entries-style stores, last-write-wins otherwise.
+async function resolveConflict(store, local, server) {
+  if (store === 'meal_plan') {
+    const localEntries = local?.entries || [];
+    const serverEntries = server?.entries || [];
+    const byId = new Map();
+    for (const e of serverEntries) byId.set(e.id, e);
+    for (const e of localEntries) byId.set(e.id, e); // local wins per-entry
+    return { version: 1, entries: [...byId.values()] };
+  }
+  if (store === 'pantry') {
+    const bySlug = new Map();
+    for (const it of (server?.items || [])) bySlug.set(it.slug, it);
+    for (const it of (local?.items || [])) bySlug.set(it.slug, it);
+    return { version: 1, items: [...bySlug.values()] };
+  }
+  // Shopping list: union items, local checked state wins.
+  if (store === 'shopping_list') {
+    const bySlug = new Map();
+    for (const it of (server?.items || [])) bySlug.set(it.slug, it);
+    for (const it of (local?.items || [])) bySlug.set(it.slug, it);
+    return { ...local, items: [...bySlug.values()], generatedAt: local?.generatedAt || server?.generatedAt || new Date().toISOString() };
+  }
+  return local;
+}
+
+async function syncNow({ silent = false } = {}) {
+  if (syncBusy) return;
+  syncBusy = true;
+  setSyncState('pending', 'syncing…');
+  try {
+    // 1. Pull latest from server into local state.
+    await pullAll(storesApi, applyStoreFromServer);
+    // 2. Push local pending writes.
+    const r = await pushQueue(storesApi, { resolveConflict });
+    if (r.errors.length) {
+      setSyncState('error', 'sync failed');
+    } else if (pendingCount() > 0) {
+      setSyncState('pending', `${pendingCount()} pending`);
+    } else {
+      setSyncState('synced', 'synced');
+      if (!silent) flash('Synced across devices.');
+    }
+  } catch (err) {
+    setSyncState('error', err?.code === 'NOT_CONFIGURED' ? 'sync off' : 'sync failed');
+  } finally {
+    syncBusy = false;
+  }
+}
+
+// Enqueue helpers that write through to localStorage AND the sync queue.
+function enqueueAfterChange(store, payload) {
+  enqueuePut(store, payload);
+  refreshSyncBadge();
+  // Fire-and-forget push attempt (debounced-ish via syncBusy gate).
+  if (!syncBusy) setTimeout(() => syncNow({ silent: true }).catch(() => {}), 400);
+}
+
+// Monkeypatch the three store module save-points so any local change
+// triggers a queued sync. Avoids touching the modules themselves so
+// Phase 0-3 stays pure.
+const origSavePlan = Plan.savePlan;
+Plan.savePlan = (p) => { const r = origSavePlan(p); enqueueAfterChange('meal_plan', r); return r; };
+const origSaveList = Shop.saveList;
+Shop.saveList = (s) => { const r = origSaveList(s); enqueueAfterChange('shopping_list', r); return r; };
+const origSavePantry = Pantry.savePantry;
+Pantry.savePantry = (p) => { const r = origSavePantry(p); enqueueAfterChange('pantry', r); return r; };
+
+document.getElementById('sync-btn').addEventListener('click', () => syncNow());
+
 // ---- Boot ----
 renderPlan();
 renderCookLog();
+refreshSyncBadge();
+// Attempt an initial pull (silent if no session).
+syncNow({ silent: true }).catch(() => {});
 if (!recipes.length) {
   flash('No recipes found in local storage. Open the main Recipe Journal first so this page sees your library.');
 }
