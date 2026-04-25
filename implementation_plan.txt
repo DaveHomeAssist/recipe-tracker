@@ -1,0 +1,300 @@
+Recipe Tracker Implementation Plan
+=================================
+
+Generated: 2026-04-19
+Project: /Users/daverobertson/Desktop/Code/10-projects/active/recipe-tracker
+
+Current Project Snapshot
+------------------------
+- Active source repo is `10-projects/active/recipe-tracker`.
+- GitHub Pages remains the frontend host for `https://davehomeassist.github.io/recipe-tracker/`.
+- Notion remains the system of record for synced recipe data.
+- Recently completed work already in the repo:
+  - Notion photo backfill logic for existing rows
+  - Notion `Cuisine` select mapping fix
+  - Anticipatory UX and local preference persistence
+  - Microinteraction and mobile-readiness pass
+  - Data-integrity hardening for sync dedupe, queued-write replay, and date validation
+  - Session-token auth alignment and JSON request-body size limiting
+  - Backup workflow validation, lockfile support, and fail-fast config checks
+- Confirmed remaining issues as of 2026-04-19:
+  - Live production data still shows `40 / 187` recipes missing images until a real sync/backfill is run
+  - GitHub backup workflow is blocked on missing secrets
+  - `IMPLEMENTATION_PLAN.md` and `AUDIT.md` are stale
+
+Assumptions
+-----------
+- Dave Robertson is the product owner and operational owner unless otherwise noted.
+- Codex is the implementation owner for code and test changes in this repo.
+- The Notion `Photos` property remains the canonical image source for recipes.
+- Production sync and Notion verification require Dave's live access to the deployed app and database.
+- Timeline estimates assume no schema redesign and no new backend platform changes.
+
+
+Phase 1 - Production Image Backfill and Live Validation
+-------------------------------------------------------
+Status: Pending
+Priority: Urgent
+
+Objective
+- Exercise the shipped Notion photo-backfill fix against production data and verify that missing recipe images actually populate in Notion and the live app.
+
+Key milestones
+- Trigger a live sync from the deployed app.
+- Verify that existing Notion rows with missing `Photos` receive backfilled images.
+- Check several known recipes that previously lacked images.
+- Recount missing images in the live served dataset and record the before/after result.
+- Confirm the live app is serving the current sync UX and sync summary messaging.
+
+Required resources
+- Live app: `https://davehomeassist.github.io/recipe-tracker/`
+- Notion database: `DB | Recipes`
+- Browser access to the deployed app and Notion
+- Local repo for reference and validation scripts
+
+Estimated timeline
+- 0.5 day
+
+Responsible party / owner
+- Dave: run production sync and verify live Notion data
+- Codex: support verification, recount missing images, and patch follow-up bugs if found
+
+Completion criteria
+- Missing-image count drops materially from the current `40 / 187`.
+- At least 3 previously missing-photo recipes are confirmed correct in Notion and the live UI.
+- Any remaining missing images are listed as true data gaps, not sync failures.
+
+
+Phase 2 - Data Integrity Hardening
+----------------------------------
+Status: Completed 2026-04-19
+Priority: High
+
+Objective
+- Remove the highest-risk correctness issues that can duplicate data or allow invalid recipe payloads to pass too far into the system.
+
+Key milestones
+- Update sync dedupe logic so recipes without a URL match on a fallback key such as `name|source`, not URL alone.
+- Make queued remote-write replay checkpointed or otherwise idempotent so partial failure does not replay successful writes.
+- Tighten recipe date validation so invalid dates fail before Notion write attempts.
+- Add regression coverage for all three paths.
+
+Required resources
+- Source files:
+  - `src/server/recipes-service.js`
+  - `src/recipe-remote.js`
+  - `src/recipe-schema.js`
+  - `src/server/notion-mapper.js`
+- Test files:
+  - `tests/unit/*`
+  - `tests/integration/backend.test.js`
+
+Estimated timeline
+- 1 to 2 working days
+
+Responsible party / owner
+- Codex: implement fixes and tests
+- Dave: review behavior changes around dedupe rules and conflict handling
+
+Completion criteria
+- Repeated syncs no longer create duplicate Notion rows for no-URL recipes.
+- A partially successful queued replay does not re-run already-completed writes on the next reconnect.
+- Invalid dates are rejected consistently before server-side Notion calls.
+- Unit and integration tests pass with new regression cases.
+
+Execution result
+- Completed in the repo on 2026-04-19.
+- Added fallback-key matching for no-URL sync/import dedupe.
+- Made queued remote replay shrink the persisted queue after each successful write.
+- Added strict date validation and regression coverage.
+- Verification passed:
+  - `npm run test:unit`
+  - `npm run test:integration`
+
+
+Phase 3 - Security Model Alignment
+----------------------------------
+Status: Completed 2026-04-19
+Priority: High
+
+Objective
+- Align the shipped frontend with the documented security model so the client stops storing and transmitting the long-lived family access code directly.
+
+Key milestones
+- Switch the client auth flow from `x-family-code` usage to the existing `/api/v1/session` bearer-token flow.
+- Store only the scoped session token in client storage.
+- Remove or deprecate the raw family-code client storage path once session flow is verified.
+- Add a maximum request-body limit before JSON parsing in the server HTTP helper.
+- Re-test login, logout, expired-session handling, and protected API calls.
+
+Required resources
+- Source files:
+  - `src/recipe-api.js`
+  - `src/auth.js`
+  - `src/family-code-storage.js`
+  - `src/session-storage.js`
+  - `api/v1/session.js`
+  - `src/server/http.js`
+- Security reference:
+  - `SECURITY.md`
+- Browser test coverage for auth flows
+
+Estimated timeline
+- 1 to 2 working days
+
+Responsible party / owner
+- Codex: implement auth and request-size-limit changes
+- Dave: confirm acceptable session UX and redeploy with any required env validation
+
+Completion criteria
+- Client no longer persists the raw family access code for normal authenticated use.
+- API calls use bearer tokens end to end.
+- Oversized request payloads fail early and safely.
+- Existing auth-related tests pass and new session-path regressions are covered.
+
+Execution result
+- Completed in the repo on 2026-04-19.
+- Switched the client auth flow to `/api/v1/session` and bearer-token requests.
+- Moved the primary `/api` recipe routes to session auth.
+- Kept a one-time legacy family-code migration path so existing devices can exchange stored codes for scoped sessions and then clear them.
+- Added a request-body size limit in `src/server/http.js` with explicit `413 PAYLOAD_TOO_LARGE` responses.
+- Verification passed:
+  - `npm run test:unit`
+  - `npm run test:integration`
+  - `npx playwright test tests/e2e/remote.spec.js`
+
+
+Phase 4 - Backup Activation and Operational Readiness
+-----------------------------------------------------
+Status: Blocked by configuration
+Priority: High
+
+Objective
+- Move the repaired backup workflow from "valid but blocked" to an end-to-end verified backup path.
+
+Key milestones
+- Provision required GitHub Actions secrets:
+  - `NOTION_ACCESS_TOKEN`
+  - `NOTION_DATA_SOURCE_ID`
+- If non-local backup storage is desired, also provision destination-specific secrets for `blob` or `s3`.
+- Manually run the `Nightly Notion backup` workflow with `workflow_dispatch`.
+- Verify that the workflow completes backup plus backup verification successfully.
+- Confirm the chosen destination and retention expectations are documented.
+
+Required resources
+- GitHub repo Actions settings
+- Notion integration token and data source ID
+- Backup destination credentials if not using local smoke-test mode
+- Workflow file: `.github/workflows/backup.yml`
+- Backup scripts under `scripts/`
+
+Estimated timeline
+- 0.5 day once secrets are available
+
+Responsible party / owner
+- Dave: provide and configure production secrets
+- Codex: verify workflow behavior and patch any remaining workflow/script issues
+
+Dependencies / blockers
+- Blocked until the required GitHub secrets are configured.
+
+Completion criteria
+- A manual workflow run succeeds end to end.
+- Verification step passes against the produced backup artifact or remote destination.
+- Nightly schedule can remain enabled with confidence.
+
+
+Phase 5 - Documentation and Workspace Cleanup
+---------------------------------------------
+Status: In progress 2026-04-19
+Priority: Medium
+
+Objective
+- Bring the project documentation and local workspace inventory back in sync with the actual repo state.
+
+Key milestones
+- Rewrite `IMPLEMENTATION_PLAN.md` so it no longer describes already-shipped gaps as open work.
+- Refresh `AUDIT.md` to reflect the real current status, shipped UX work, and current open risks.
+- Keep this repo-local `implementation_plan.txt` as the current operational plan, or replace it with a committed markdown equivalent.
+- Decide whether the older snapshot at `10-active-projects/recipes-2026-04` should be archived, retained, or removed.
+
+Required resources
+- Current repo state and test results
+- Existing docs:
+  - `IMPLEMENTATION_PLAN.md`
+  - `AUDIT.md`
+  - `SECURITY.md`
+- Local workspace inventory for old project copies
+
+Estimated timeline
+- 0.5 to 1 working day
+
+Responsible party / owner
+- Codex: rewrite stale docs and prepare cleanup changes
+- Dave: decide snapshot retention and doc publishing preference
+
+Completion criteria
+- Planning and audit docs match the current shipped codebase.
+- The old snapshot has an explicit disposition: keep, archive, or remove.
+- There is one clearly current implementation plan for the repo.
+
+Execution result so far
+- `IMPLEMENTATION_PLAN.md` has been rewritten to reflect the real remaining blockers.
+- `AUDIT.md` has been refreshed to match the shipped codebase and current operational risks.
+- Remaining blocker inside this phase: explicit keep/archive/remove decision for `10-active-projects/recipes-2026-04`.
+
+
+Phase 6 - Post-Hardening Product Growth Backlog
+-----------------------------------------------
+Status: Optional, after Phases 1-5
+Priority: Decision-dependent
+
+Objective
+- Expand the product only after production sync, integrity, security, backup, and docs are stable.
+
+Key milestones
+- Prioritize the next feature set from the current backlog:
+  - Missing-photo management UI and bulk remediation
+  - Duplicate detection and merge UI
+  - Richer search and filter options
+  - Batch recipe actions
+  - Meal-planning and shopping-list workflows
+- Convert the selected feature set into a smaller scoped implementation plan.
+- Add tests alongside each chosen feature set.
+
+Required resources
+- Product prioritization from Dave
+- Existing frontend and backend codebase
+- Test harness for regression coverage
+
+Estimated timeline
+- 2 to 5 working sessions, depending on scope
+
+Responsible party / owner
+- Dave: choose priorities and acceptance criteria
+- Codex: implement the selected features
+
+Dependencies / blockers
+- Should not start until Phases 1-5 are either complete or explicitly deferred.
+
+Completion criteria
+- Selected backlog items have clear scope, owners, tests, and acceptance criteria before implementation starts.
+
+
+Recommended Execution Order
+---------------------------
+1. Phase 1 - Production Image Backfill and Live Validation
+2. Phase 2 - Data Integrity Hardening
+3. Phase 3 - Security Model Alignment
+4. Phase 4 - Backup Activation and Operational Readiness
+5. Phase 5 - Documentation and Workspace Cleanup
+6. Phase 6 - Post-Hardening Product Growth Backlog
+
+
+Definition of Done
+------------------
+- Production image backfill has been run and verified against live Notion data.
+- The highest-risk data-duplication and replay issues are fixed and regression-tested.
+- Client authentication matches the documented session-token model.
+- Backup workflow runs successfully with real configuration.
+- Planning and audit documentation reflect the actual current state of the repo.

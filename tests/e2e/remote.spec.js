@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 
 test('remote mode adds a recipe, syncs to the mocked Notion backend, and reload persists it', async ({ page }) => {
   const notionRows = [];
-  const familyCode = 'family-code';
+  const sessionToken = 'session-token';
   let recipeListRequests = 0;
 
   await page.addInitScript(() => {
@@ -11,7 +11,13 @@ test('remote mode adds a recipe, syncs to the mocked Notion backend, and reload 
       apiBaseUrl: '/api',
     };
     try {
-      localStorage.setItem('recipe_journal_family_code', 'family-code');
+      const now = Date.now();
+      localStorage.setItem('recipe_journal_session', JSON.stringify({
+        token: 'session-token',
+        scope: 'recipe_journal',
+        issuedAt: new Date(now).toISOString(),
+        expiresAt: new Date(now + 24 * 60 * 60 * 1000).toISOString(),
+      }));
     } catch {}
   });
 
@@ -22,13 +28,13 @@ test('remote mode adds a recipe, syncs to the mocked Notion backend, and reload 
     });
   });
 
-  await page.route('**/api/health', async (route) => {
-    const code = route.request().headers()['x-family-code'];
-    if (code !== familyCode) {
+  await page.route('**/api/v1/health', async (route) => {
+    const auth = route.request().headers()['authorization'];
+    if (auth !== `Bearer ${sessionToken}`) {
       await route.fulfill({
         status: 401,
         contentType: 'application/json',
-        body: JSON.stringify({ error: { code: 'INVALID_FAMILY_CODE', message: 'A valid family code is required' } }),
+        body: JSON.stringify({ error: { code: 'UNAUTHORIZED', message: 'Authentication required' } }),
       });
       return;
     }
@@ -39,14 +45,14 @@ test('remote mode adds a recipe, syncs to the mocked Notion backend, and reload 
     });
   });
 
-  await page.route('**/api/recipes', async (route) => {
+  await page.route('**/api/v1/recipes', async (route) => {
     const request = route.request();
-    const code = request.headers()['x-family-code'];
-    if (code !== familyCode) {
+    const auth = request.headers()['authorization'];
+    if (auth !== `Bearer ${sessionToken}`) {
       await route.fulfill({
         status: 401,
         contentType: 'application/json',
-        body: JSON.stringify({ error: { code: 'INVALID_FAMILY_CODE', message: 'A valid family code is required' } }),
+        body: JSON.stringify({ error: { code: 'UNAUTHORIZED', message: 'Authentication required' } }),
       });
       return;
     }
@@ -85,14 +91,14 @@ test('remote mode adds a recipe, syncs to the mocked Notion backend, and reload 
     await route.fallback();
   });
 
-  await page.route('**/api/recipes/*', async (route) => {
+  await page.route('**/api/v1/recipes/*', async (route) => {
     const request = route.request();
-    const code = request.headers()['x-family-code'];
-    if (code !== familyCode) {
+    const auth = request.headers()['authorization'];
+    if (auth !== `Bearer ${sessionToken}`) {
       await route.fulfill({
         status: 401,
         contentType: 'application/json',
-        body: JSON.stringify({ error: { code: 'INVALID_FAMILY_CODE', message: 'A valid family code is required' } }),
+        body: JSON.stringify({ error: { code: 'UNAUTHORIZED', message: 'Authentication required' } }),
       });
       return;
     }

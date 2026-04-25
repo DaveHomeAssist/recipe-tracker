@@ -56,6 +56,14 @@ describe('validateRecipe — happy path', () => {
     expect(out.version).toBe(2);
   });
 
+  it('accepts ISO date-time strings for date', () => {
+    const out = validateRecipe({
+      name: 'Timed Date',
+      date: '2026-04-19T12:34:56.000Z',
+    });
+    expect(out.date).toBe('2026-04-19T12:34:56.000Z');
+  });
+
   it('preserves a minimal recipe (name only)', () => {
     const out = validateRecipe({ name: 'Toast' });
     expect(out).not.toBeNull();
@@ -79,6 +87,12 @@ describe('validateRecipe — rejects obviously bad input', () => {
     expect(validateRecipe('Cacio e Pepe')).toBeNull();
     expect(validateRecipe(42)).toBeNull();
     expect(validateRecipe([])).toBeNull();
+  });
+
+  it('returns null for invalid date values', () => {
+    expect(validateRecipe({ name: 'x', date: '2026-02-30' })).toBeNull();
+    expect(validateRecipe({ name: 'x', date: 'not-a-date' })).toBeNull();
+    expect(validateRecipe({ name: 'x', date: '04/19/2026' })).toBeNull();
   });
 });
 
@@ -183,6 +197,17 @@ describe('validateImport — top-level shape', () => {
     expect(out.recipes).toHaveLength(2);
     expect(out.dropped).toBe(2);
     expect(out.total).toBe(4);
+  });
+
+  it('drops records with invalid dates', () => {
+    const out = validateImport([
+      { name: 'good', date: '2026-04-19' },
+      { name: 'bad', date: '2026-13-01' },
+    ]);
+    expect(out.ok).toBe(true);
+    expect(out.recipes).toHaveLength(1);
+    expect(out.recipes[0].name).toBe('good');
+    expect(out.dropped).toBe(1);
   });
 
   it('rejects null and undefined', () => {

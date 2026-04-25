@@ -1,6 +1,11 @@
 export const SESSION_STORAGE_KEY = 'recipe_journal_session';
 
-const isBrowser = () => typeof localStorage !== 'undefined';
+const getStorage = () =>
+  typeof localStorage !== 'undefined' &&
+  typeof localStorage.getItem === 'function' &&
+  typeof localStorage.setItem === 'function'
+    ? localStorage
+    : null;
 
 const parseDateMs = (value) => {
   const ms = Date.parse(String(value || ''));
@@ -8,16 +13,18 @@ const parseDateMs = (value) => {
 };
 
 export const clearStoredSession = () => {
-  if (!isBrowser()) return;
+  const storage = getStorage();
+  if (!storage) return;
   try {
-    localStorage.removeItem(SESSION_STORAGE_KEY);
+    storage.removeItem(SESSION_STORAGE_KEY);
   } catch {}
 };
 
 export const loadStoredSession = () => {
-  if (!isBrowser()) return null;
+  const storage = getStorage();
+  if (!storage) return null;
   try {
-    const raw = localStorage.getItem(SESSION_STORAGE_KEY);
+    const raw = storage.getItem(SESSION_STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     const token = String(parsed?.token || '').trim();
@@ -57,9 +64,10 @@ export const storeSession = (session) => {
     scope: String(session?.scope || 'recipe_journal'),
   };
 
-  if (isBrowser()) {
+  const storage = getStorage();
+  if (storage) {
     try {
-      localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(stored));
+      storage.setItem(SESSION_STORAGE_KEY, JSON.stringify(stored));
     } catch {
       return stored;
     }

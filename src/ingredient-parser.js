@@ -150,6 +150,10 @@ export function parseIngredient(line) {
   const q = extractQuantity(work);
   work = q.rest;
 
+  // Treat leading articles before opaque units as descriptors, e.g.
+  // "a pinch of salt" should parse as unit "pinch" and item "salt".
+  work = work.replace(/^\s*(?:a|an|the)\s+/i, '');
+
   const u = extractUnit(work);
   work = u.rest;
 

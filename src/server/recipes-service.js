@@ -1,9 +1,10 @@
-import { dedupeByUrl, normalizeTags } from '../recipe-lib.js';
+import { normalizeTags } from '../recipe-lib.js';
 import { validateImport, validateRecipe } from '../recipe-schema.js';
 import { archiveRecipePage, createRecipePage, findRecipeByAppId, findRecipePageByAppId, queryAllRecipes, updateRecipePage } from './notion-api.js';
 import { notionPageToRecipe } from './notion-mapper.js';
 
 const sameKey = (value) => String(value || '').trim().toLowerCase();
+const fallbackKey = (recipe) => `${sameKey(recipe?.name)}|${sameKey(recipe?.source)}`;
 const makeRecipeId = () =>
   globalThis.crypto?.randomUUID?.() || `recipe-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 const SYNC_BACKFILL_FIELDS = [
@@ -28,6 +29,54 @@ const normalizeRemoteRecipe = (recipe, overrides = {}) => ({
   ...overrides,
   tags: normalizeTags(recipe.tags),
 });
+
+const dedupeIncomingRecipes = (recipes = []) => {
+  const seenUrl = new Set();
+  const seenFallback = new Set();
+  const deduped = [];
+
+  for (const recipe of recipes) {
+    const urlKey = sameKey(recipe?.url);
+    if (urlKey) {
+      if (seenUrl.has(urlKey)) continue;
+      seenUrl.add(urlKey);
+      deduped.push(recipe);
+      continue;
+    }
+
+    const recipeFallbackKey = fallbackKey(recipe);
+    if (seenFallback.has(recipeFallbackKey)) continue;
+    seenFallback.add(recipeFallbackKey);
+    deduped.push(recipe);
+  }
+
+  return deduped;
+};
+
+const indexRecipesForMatching = (recipes = []) => {
+  const byUrl = new Map();
+  const byFallback = new Map();
+
+  for (const recipe of recipes) {
+    const urlKey = sameKey(recipe?.url);
+    if (urlKey) byUrl.set(urlKey, recipe);
+    byFallback.set(fallbackKey(recipe), recipe);
+  }
+
+  return { byUrl, byFallback };
+};
+
+const findMatchingRecipe = (indexes, recipe) => {
+  const urlKey = sameKey(recipe?.url);
+  if (urlKey) return indexes.byUrl.get(urlKey) || null;
+  return indexes.byFallback.get(fallbackKey(recipe)) || null;
+};
+
+const rememberRecipeForMatching = (indexes, recipe) => {
+  const urlKey = sameKey(recipe?.url);
+  if (urlKey) indexes.byUrl.set(urlKey, recipe);
+  indexes.byFallback.set(fallbackKey(recipe), recipe);
+};
 
 const mergeRecipeBackfill = (existing, incoming) => {
   const merged = { ...existing };
@@ -154,7 +203,7 @@ export const importRecipesToNotion = async ({ mode, payload, replaceConfirmed = 
     throw error;
   }
 
-  const incoming = dedupeByUrl(
+  const incoming = dedupeIncomingRecipes(
     validated.recipes.map((recipe) =>
       normalizeRemoteRecipe(recipe, {
         id: recipe.id || makeRecipeId(),
@@ -189,26 +238,17 @@ export const importRecipesToNotion = async ({ mode, payload, replaceConfirmed = 
     };
   }
 
-  const byUrl = new Map();
-  const byFallback = new Set();
-
-  for (const recipe of existing) {
-    const urlKey = sameKey(recipe.url);
-    const fallbackKey = `${sameKey(recipe.name)}|${sameKey(recipe.source)}`;
-    if (urlKey) byUrl.set(urlKey, recipe);
-    byFallback.add(fallbackKey);
-  }
+  const indexes = indexRecipesForMatching(existing);
 
   let added = 0;
   let duplicatesSkipped = 0;
   for (const recipe of incoming) {
-    const urlKey = sameKey(recipe.url);
-    const fallbackKey = `${sameKey(recipe.name)}|${sameKey(recipe.source)}`;
-    if ((urlKey && byUrl.has(urlKey)) || (!urlKey && byFallback.has(fallbackKey))) {
+    if (findMatchingRecipe(indexes, recipe)) {
       duplicatesSkipped++;
       continue;
     }
-    await createRecipePage(recipe);
+    const created = await createRecipePage(recipe);
+    rememberRecipeForMatching(indexes, created);
     added++;
   }
 
@@ -229,7 +269,7 @@ export const syncRecipesToNotion = async (payload) => {
     throw error;
   }
 
-  const incoming = dedupeByUrl(
+  const incoming = dedupeIncomingRecipes(
     validated.recipes.map((recipe) =>
       normalizeRemoteRecipe(recipe, {
         id: recipe.id || makeRecipeId(),
@@ -239,24 +279,19 @@ export const syncRecipesToNotion = async (payload) => {
   );
 
   const existing = await queryAllRecipes();
-  const existingByUrl = new Map(
-    existing
-      .filter((recipe) => sameKey(recipe.url))
-      .map((recipe) => [sameKey(recipe.url), recipe])
-  );
+  const indexes = indexRecipesForMatching(existing);
 
   let added = 0;
   let updated = 0;
   let duplicatesSkipped = 0;
 
   for (const recipe of incoming) {
-    const urlKey = sameKey(recipe.url);
-    if (urlKey && existingByUrl.has(urlKey)) {
-      const existingRecipe = existingByUrl.get(urlKey);
+    const existingRecipe = findMatchingRecipe(indexes, recipe);
+    if (existingRecipe) {
       const merged = mergeRecipeBackfill(existingRecipe, recipe);
       if (merged) {
         const saved = await updateRecipePage(existingRecipe.notionPageId, merged);
-        existingByUrl.set(urlKey, saved);
+        rememberRecipeForMatching(indexes, saved);
         updated++;
       } else {
         duplicatesSkipped++;
@@ -269,7 +304,7 @@ export const syncRecipesToNotion = async (payload) => {
       version: 1,
     });
 
-    if (urlKey) existingByUrl.set(urlKey, created);
+    rememberRecipeForMatching(indexes, created);
     added++;
   }
 

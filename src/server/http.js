@@ -2,6 +2,7 @@ const JSON_HEADERS = {
   'Content-Type': 'application/json; charset=utf-8',
   'Cache-Control': 'no-store',
 };
+const DEFAULT_MAX_JSON_BODY_BYTES = 1024 * 1024;
 
 // Parse a comma-separated ALLOWED_ORIGINS env var into a Set for O(1) lookup.
 // Accepts legacy singular ALLOWED_ORIGIN as a fallback. Empty = no CORS headers
@@ -125,13 +126,37 @@ export const methodNotAllowed = (req, res, methods) =>
 export const unauthorized = (req, res, message = 'Authentication required') =>
   sendError(req, res, 401, 'UNAUTHORIZED', message);
 
-export const readJsonBody = async (req) => {
+const resolveMaxJsonBodyBytes = () => {
+  const configured = Number(process.env.MAX_JSON_BODY_BYTES || DEFAULT_MAX_JSON_BODY_BYTES);
+  return Number.isFinite(configured) && configured > 0 ? Math.floor(configured) : DEFAULT_MAX_JSON_BODY_BYTES;
+};
+
+const createPayloadTooLargeError = (limitBytes) => {
+  const error = new Error(`Request body exceeds the ${limitBytes} byte limit`);
+  error.status = 413;
+  error.code = 'PAYLOAD_TOO_LARGE';
+  return error;
+};
+
+export const readJsonBody = async (req, { maxBytes = resolveMaxJsonBodyBytes() } = {}) => {
   if (req.body && typeof req.body === 'object') return req.body;
   if (!req.body && ['GET', 'HEAD'].includes(req.method)) return {};
 
   const chunks = [];
-  for await (const chunk of req) chunks.push(Buffer.from(chunk));
+  let totalBytes = 0;
+  for await (const chunk of req) {
+    const buffer = Buffer.from(chunk);
+    totalBytes += buffer.length;
+    if (totalBytes > maxBytes) throw createPayloadTooLargeError(maxBytes);
+    chunks.push(buffer);
+  }
   const raw = Buffer.concat(chunks).toString('utf8').trim();
   if (!raw) return {};
-  return JSON.parse(raw);
+  try {
+    return JSON.parse(raw);
+  } catch (error) {
+    error.status = 400;
+    error.code = 'INVALID_JSON';
+    throw error;
+  }
 };

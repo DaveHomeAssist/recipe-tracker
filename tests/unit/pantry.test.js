@@ -117,7 +117,7 @@ describe('recipe coverage', () => {
 describe('rankRecipesByCoverage', () => {
   it('sorts by coverage desc then matched desc', () => {
     const recipes = [
-      { id: 'a', ingredients: '1 cup flour\n2 eggs' }, // 0% if pantry empty
+      { id: 'a', ingredients: '2 eggs' },              // 0% if pantry has only flour
       { id: 'b', ingredients: '1 cup flour' },         // 100% if flour
       { id: 'c', ingredients: '1 cup flour\n1 cup milk' }, // 50% if flour
     ];

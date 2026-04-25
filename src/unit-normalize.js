@@ -55,7 +55,7 @@ export function formatQty(qty) {
   const frac = qty - whole;
   if (frac < 0.02) return String(whole);
   for (const [val, label] of COMMON_FRACTIONS) {
-    if (Math.abs(frac - val) < 0.03) {
+    if (Math.abs(frac - val) < 0.002) {
       return whole ? `${whole} ${label}` : label;
     }
   }

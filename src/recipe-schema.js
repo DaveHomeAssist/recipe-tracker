@@ -11,6 +11,8 @@ import { safeUrl, splitTagLabels } from './recipe-lib.js';
 
 const MAX_FIELD_LEN = 100_000; // 100 KB per text field — forgiving but bounded
 const MAX_RECIPES = 10_000;    // reject imports that would blow up the grid
+const DATE_ONLY_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
+const ISO_DATE_TIME_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:\d{2})$/;
 
 const toStr = (v) => {
   if (v == null) return '';
@@ -39,6 +41,33 @@ const toVersion = (v) => {
   return Math.floor(n);
 };
 
+const toDate = (v) => {
+  const value = toStr(v).trim();
+  if (!value) return '';
+
+  const dateOnly = DATE_ONLY_RE.exec(value);
+  if (dateOnly) {
+    const year = Number(dateOnly[1]);
+    const month = Number(dateOnly[2]);
+    const day = Number(dateOnly[3]);
+    const normalized = new Date(Date.UTC(year, month - 1, day));
+    if (
+      normalized.getUTCFullYear() === year &&
+      normalized.getUTCMonth() === month - 1 &&
+      normalized.getUTCDate() === day
+    ) {
+      return value;
+    }
+    return null;
+  }
+
+  if (ISO_DATE_TIME_RE.test(value) && Number.isFinite(Date.parse(value))) {
+    return value;
+  }
+
+  return null;
+};
+
 export const validateRecipe = (raw) => {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
 
@@ -49,6 +78,8 @@ export const validateRecipe = (raw) => {
   const canonicalCookTime = raw.cooktime ?? raw.cookTime;
   const canonicalUrl = raw.sourceUrl ?? raw.url;
   const canonicalDate = raw.date ?? raw.dateTried;
+  const normalizedDate = toDate(canonicalDate);
+  if (normalizedDate == null) return null;
 
   return {
     id: toId(raw.id),
@@ -65,7 +96,7 @@ export const validateRecipe = (raw) => {
     notes: toStr(raw.notes),
     url: safeUrl(canonicalUrl),
     image: safeUrl(raw.image),
-    date: toStr(canonicalDate).trim(),
+    date: normalizedDate,
     rating: toRating(raw.rating),
     version: toVersion(raw.version),
   };

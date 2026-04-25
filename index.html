@@ -553,8 +553,9 @@ import { validateImport } from './src/recipe-schema.js';
 import { mergeSeedImages } from './src/seed-images.js';
 import { createRecipeApi } from './src/recipe-api.js';
 import { installGlobalErrorReporting } from './src/client-error-reporting.js';
-import { clearStoredFamilyCode, loadStoredFamilyCode } from './src/family-code-storage.js';
-import { submitAccessCode } from './src/auth.js';
+import { loadStoredFamilyCode } from './src/family-code-storage.js';
+import { getStoredSessionToken } from './src/session-storage.js';
+import { clearStoredCredentials, migrateLegacyFamilyCode, submitAccessCode } from './src/auth.js';
 import { loadRemoteRecipeCache, saveRemoteRecipeCache } from './src/recipe-cache.js';
 import { bootstrapRemoteRecipes, deleteRemoteRecipe, replayQueuedRemoteWrites, saveRemoteRecipe, syncLocalCorpusToRemote } from './src/recipe-remote.js';
 import { loadPrefs, recordEdit, recordExport, recordFilter, recordRating, recordSearch, recordView, savePrefs } from './src/recipe-prefs.js';
@@ -588,8 +589,8 @@ const REMOTE_MODE = Boolean(APP_CONFIG.USE_REMOTE_BACKEND || APP_CONFIG.syncMode
 const remoteApi = REMOTE_MODE
   ? createRecipeApi({
       baseUrl: APP_CONFIG.apiBaseUrl || '/api',
-      getFamilyCode: loadStoredFamilyCode,
-      onUnauthorized: clearStoredFamilyCode,
+      getSessionToken: getStoredSessionToken,
+      onUnauthorized: clearStoredCredentials,
     })
   : null;
 let prefs = loadPrefs();
@@ -1487,8 +1488,8 @@ function openAuthModal(message = 'Enter the family access code to load the share
 }
 
 function handleRemoteAuthFailure(error, message = 'Access expired or changed. Re-enter the family access code to continue.') {
-  if (error?.code !== 'INVALID_FAMILY_CODE') return false;
-  clearStoredFamilyCode();
+  if (error?.code !== 'UNAUTHORIZED' && Number(error?.status) !== 401) return false;
+  clearStoredCredentials();
   openAuthModal(message);
   return true;
 }
@@ -1498,6 +1499,10 @@ async function syncRemoteRecipes({ allowPrompt = true } = {}) {
 
   bootError = '';
   try {
+    if (!getStoredSessionToken() && loadStoredFamilyCode()) {
+      await migrateLegacyFamilyCode(remoteApi);
+    }
+
     const state = await bootstrapRemoteRecipes({
       api: remoteApi,
       fallback: {

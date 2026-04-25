@@ -10,18 +10,18 @@ class ApiError extends Error {
 
 const trimTrailingSlash = (value) => String(value || '').replace(/\/+$/, '');
 
-export const createRecipeApi = ({ baseUrl = '/api', getFamilyCode = () => '', onUnauthorized = () => {} } = {}) => {
+export const createRecipeApi = ({ baseUrl = '/api', getSessionToken = () => '', onUnauthorized = () => {} } = {}) => {
   const root = trimTrailingSlash(baseUrl);
 
   const request = async (path, options = {}) => {
-    const familyCode = String(options.familyCode ?? getFamilyCode() ?? '').trim();
+    const sessionToken = String(options.sessionToken ?? getSessionToken() ?? '').trim();
 
     let response;
     try {
       response = await fetch(`${root}${path}`, {
         headers: {
           'Content-Type': 'application/json',
-          ...(familyCode ? { 'x-family-code': familyCode } : {}),
+          ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}),
           ...(options.headers || {}),
         },
         ...options,
@@ -38,7 +38,7 @@ export const createRecipeApi = ({ baseUrl = '/api', getFamilyCode = () => '', on
 
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
-      if (response.status === 401) onUnauthorized();
+      if (response.status === 401 && payload?.error?.code === 'UNAUTHORIZED') onUnauthorized();
       throw new ApiError(payload?.error?.message || `Request failed with ${response.status}`, {
         status: response.status,
         code: payload?.error?.code,
@@ -49,44 +49,48 @@ export const createRecipeApi = ({ baseUrl = '/api', getFamilyCode = () => '', on
   };
 
   return {
-    verifyAccessCode: (familyCode) =>
-      request('/health', {
-        method: 'GET',
-        familyCode,
-      }),
+    createSession: async (accessCode) => {
+      const payload = await request('/v1/session', {
+        method: 'POST',
+        body: JSON.stringify({ accessCode }),
+      });
+      return payload;
+    },
+    getSession: () => request('/v1/session', { method: 'GET' }),
+    deleteSession: () => request('/v1/session', { method: 'DELETE' }),
     getRecipes: async () => {
-      const payload = await request('/recipes');
+      const payload = await request('/v1/recipes');
       return payload.data || [];
     },
     getRecipe: async (id) => {
-      const payload = await request(`/recipes/${encodeURIComponent(id)}`);
+      const payload = await request(`/v1/recipes/${encodeURIComponent(id)}`);
       return payload.data?.recipe || null;
     },
     createRecipe: async (recipe) => {
-      const payload = await request('/recipes', {
+      const payload = await request('/v1/recipes', {
         method: 'POST',
         body: JSON.stringify(recipe),
       });
       return payload.data?.recipe || null;
     },
     updateRecipe: async (id, patch) => {
-      const payload = await request(`/recipes/${encodeURIComponent(id)}`, {
+      const payload = await request(`/v1/recipes/${encodeURIComponent(id)}`, {
         method: 'PATCH',
         body: JSON.stringify(patch),
       });
       return payload.data?.recipe || null;
     },
     deleteRecipe: (id, version) =>
-      request(`/recipes/${encodeURIComponent(id)}`, {
+      request(`/v1/recipes/${encodeURIComponent(id)}`, {
         method: 'DELETE',
         body: JSON.stringify({ version }),
       }),
     syncRecipes: (payload) =>
-      request('/recipes/sync', {
+      request('/v1/recipes/sync', {
         method: 'POST',
         body: JSON.stringify({ payload }),
       }),
-    health: () => request('/health'),
+    health: () => request('/v1/health'),
   };
 };
 

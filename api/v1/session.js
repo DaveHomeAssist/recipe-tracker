@@ -32,7 +32,19 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'POST') {
-    const body = await readJsonBody(req).catch(() => null);
+    let body;
+    try {
+      body = await readJsonBody(req);
+    } catch (error) {
+      sendError(
+        req,
+        res,
+        error.status || 400,
+        error.code || 'INVALID_JSON',
+        error.message || 'Request body could not be parsed'
+      );
+      return;
+    }
     if (!body?.accessCode) {
       sendError(req, res, 400, 'VALIDATION_FAILED', 'Missing access code');
       return;

@@ -122,4 +122,51 @@ describe('recipe remote fallback and replay', () => {
     expect(created).toEqual([{ id: 'recipe_1', name: 'Soup', tags: [], version: 1 }]);
     expect(loadRemoteWriteQueue()).toEqual([]);
   });
+
+  it('removes successful queued writes before a later replay failure', async () => {
+    await saveRemoteRecipe({
+      api: {
+        createRecipe: async () => {
+          throw { code: 'NETWORK_ERROR' };
+        },
+      },
+      recipe: { id: 'recipe_1', name: 'Soup', tags: [] },
+      previous: null,
+    });
+
+    await saveRemoteRecipe({
+      api: {
+        updateRecipe: async () => {
+          throw { code: 'NETWORK_ERROR' };
+        },
+      },
+      recipe: { id: 'recipe_2', name: 'Salad', tags: [], version: 3 },
+      previous: { id: 'recipe_2', version: 2 },
+    });
+
+    const api = {
+      createRecipe: async (recipe) => recipe,
+      updateRecipe: async () => {
+        throw new Error('update failed');
+      },
+      deleteRecipe: async () => null,
+      getRecipes: async () => {
+        throw new Error('getRecipes should not run after a failed replay');
+      },
+    };
+
+    await expect(replayQueuedRemoteWrites({ api })).rejects.toThrow('update failed');
+    expect(loadRemoteWriteQueue()).toMatchObject([
+      {
+        id: 'recipe_2',
+        op: 'upsert',
+        baseVersion: 2,
+        recipe: {
+          id: 'recipe_2',
+          name: 'Salad',
+          version: 3,
+        },
+      },
+    ]);
+  });
 });

@@ -42,6 +42,13 @@ export const clearRemoteWriteQueue = () => {
   storage.removeItem(REMOTE_WRITE_QUEUE_KEY);
 };
 
+const persistRemainingQueue = (queue, startIndex) => {
+  const remaining = queue.slice(startIndex);
+  if (remaining.length) return saveRemoteWriteQueue(remaining);
+  clearRemoteWriteQueue();
+  return [];
+};
+
 const toLocalVersion = (recipe, previous) => {
   if (Number.isFinite(Number(recipe?.version)) && Number(recipe.version) > 0) return Number(recipe.version);
   if (previous && Number.isFinite(Number(previous.version))) return Number(previous.version) + 1;
@@ -129,7 +136,7 @@ export const bootstrapRemoteRecipes = async ({ api, fallback = { recipes: [], ta
       cached.tagRegistry ||
       {};
 
-    if (error?.code === 'INVALID_FAMILY_CODE') {
+    if (error?.status === 401 || error?.code === 'UNAUTHORIZED') {
       return {
         recipes: fallbackRecipes,
         tagRegistry: fallbackRegistry,
@@ -190,28 +197,35 @@ export const replayQueuedRemoteWrites = async ({ api }) => {
   const queue = loadRemoteWriteQueue();
   if (!queue.length) return { applied: 0, recipes: null };
 
+  let applied = 0;
   for (let index = 0; index < queue.length; index += 1) {
     const entry = queue[index];
-    if (entry.op === 'upsert') {
-      if (entry.baseVersion == null) {
-        await api.createRecipe(entry.recipe);
-      } else {
-        await api.updateRecipe(entry.id, {
-          ...entry.recipe,
-          version: entry.baseVersion,
-        });
+    try {
+      if (entry.op === 'upsert') {
+        if (entry.baseVersion == null) {
+          await api.createRecipe(entry.recipe);
+        } else {
+          await api.updateRecipe(entry.id, {
+            ...entry.recipe,
+            version: entry.baseVersion,
+          });
+        }
+      } else if (entry.op === 'delete' && entry.baseVersion != null) {
+        await api.deleteRecipe(entry.id, entry.baseVersion);
       }
-    } else if (entry.op === 'delete' && entry.baseVersion != null) {
-      await api.deleteRecipe(entry.id, entry.baseVersion);
+      applied += 1;
+      persistRemainingQueue(queue, index + 1);
+    } catch (error) {
+      persistRemainingQueue(queue, index);
+      throw error;
     }
   }
 
-  clearRemoteWriteQueue();
   const recipes = await api.getRecipes();
   clearRemoteRecipeCache();
   saveRemoteRecipeCache(recipes);
   return {
-    applied: queue.length,
+    applied,
     recipes,
   };
 };

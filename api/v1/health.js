@@ -1,17 +1,19 @@
-import { handleCorsPreflight, methodNotAllowed, rejectDisallowedOrigin, sendJson } from '../../src/server/http.js';
-import { JOURNAL_PREFIX } from '../../src/server/journal.js';
+import { handleCorsPreflight, rejectDisallowedOrigin, sendError, sendJson } from '../../src/server/http.js';
+import { requireSession } from '../../src/server/require-session.js';
+import { getNotionConfigStatus } from '../../src/server/notion-api.js';
 
-export default async function handler(req, res) {
+export default function handler(req, res) {
   if (handleCorsPreflight(req, res)) return;
   if (rejectDisallowedOrigin(req, res)) return;
+  if (!requireSession(req, res)) return;
+
   if (req.method !== 'GET') {
-    methodNotAllowed(req, res, ['GET', 'OPTIONS']);
+    sendError(req, res, 405, 'METHOD_NOT_ALLOWED', 'Expected one of: GET, OPTIONS');
     return;
   }
 
   sendJson(req, res, 200, {
     ok: true,
-    notion: process.env.NOTION_ACCESS_TOKEN ? 'configured' : 'unconfigured',
-    journalPrefix: JOURNAL_PREFIX,
+    notion: getNotionConfigStatus(),
   });
 }

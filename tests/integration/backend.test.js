@@ -1,11 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import healthHandler from '../../api/health.js';
-import recipeHandler from '../../api/recipes/index.js';
-import recipeItemHandler from '../../api/recipes/[id].js';
-import recipeSyncHandler from '../../api/recipes/sync.js';
+import healthHandler from '../../api/v1/health.js';
+import recipeHandler from '../../api/v1/recipes/index.js';
+import recipeItemHandler from '../../api/v1/recipes/[id].js';
+import recipeSyncHandler from '../../api/v1/recipes/sync.js';
+import sessionHandler from '../../api/v1/session.js';
 import clientErrorHandler from '../../api/log/client-error.js';
 import { __setNotionClientForTests } from '../../src/server/notion-api.js';
+import { createSessionToken } from '../../src/server/session.js';
 import { __resetWriteRateLimitForTests } from '../../src/server/write-rate-limit.js';
 
 const makeReq = ({ method = 'GET', headers = {}, body, query, url = '/api/test', socket } = {}) => ({
@@ -77,6 +79,13 @@ const makePage = ({
   },
 });
 
+const makeAuthHeaders = (secret = process.env.SESSION_SECRET || 'session-secret') => {
+  const { token } = createSessionToken(secret);
+  return {
+    authorization: `Bearer ${token}`,
+  };
+};
+
 describe('recipe proxy handlers', () => {
   const originalEnv = { ...process.env };
 
@@ -84,6 +93,7 @@ describe('recipe proxy handlers', () => {
     process.env = {
       ...originalEnv,
       FAMILY_ACCESS_CODE: 'family-code',
+      SESSION_SECRET: 'session-secret',
       ALLOWED_ORIGINS: 'https://davehomeassist.github.io',
       NOTION_ACCESS_TOKEN: 'server-secret',
       NOTION_DATA_SOURCE_ID: 'ds_123',
@@ -98,7 +108,7 @@ describe('recipe proxy handlers', () => {
     vi.restoreAllMocks();
   });
 
-  it('returns recipe rows from GET /api/recipes', async () => {
+  it('returns recipe rows from GET /api/v1/recipes', async () => {
     __setNotionClientForTests({
       dataSources: {
         query: vi.fn().mockResolvedValue({
@@ -114,9 +124,9 @@ describe('recipe proxy handlers', () => {
       method: 'GET',
       headers: {
         origin: 'https://davehomeassist.github.io',
-        'x-family-code': 'family-code',
+        ...makeAuthHeaders(),
       },
-      url: '/api/recipes',
+      url: '/api/v1/recipes',
     });
     const res = makeRes();
 
@@ -129,7 +139,7 @@ describe('recipe proxy handlers', () => {
     });
   });
 
-  it('returns a single recipe from GET /api/recipes/:id', async () => {
+  it('returns a single recipe from GET /api/v1/recipes/:id', async () => {
     __setNotionClientForTests({
       dataSources: {
         query: vi.fn().mockResolvedValue({
@@ -143,9 +153,9 @@ describe('recipe proxy handlers', () => {
 
     const req = makeReq({
       method: 'GET',
-      headers: { 'x-family-code': 'family-code' },
+      headers: makeAuthHeaders(),
       query: { id: 'recipe_1' },
-      url: '/api/recipes/recipe_1',
+      url: '/api/v1/recipes/recipe_1',
     });
     const res = makeRes();
 
@@ -155,18 +165,35 @@ describe('recipe proxy handlers', () => {
     expect(JSON.parse(res.body).data.recipe.id).toBe('recipe_1');
   });
 
-  it('rejects an invalid family code with 401', async () => {
+  it('creates a bearer session from a valid access code', async () => {
+    const req = makeReq({
+      method: 'POST',
+      body: { accessCode: 'family-code' },
+      url: '/api/v1/session',
+    });
+    const res = makeRes();
+
+    await sessionHandler(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toMatchObject({
+      authenticated: true,
+      scope: 'recipe_journal',
+    });
+    expect(JSON.parse(res.body).token).toBeTruthy();
+  });
+
+  it('rejects missing session auth with 401', async () => {
     const req = makeReq({
       method: 'GET',
-      headers: { 'x-family-code': 'wrong' },
-      url: '/api/health',
+      url: '/api/v1/health',
     });
     const res = makeRes();
 
     await healthHandler(req, res);
 
     expect(res.statusCode).toBe(401);
-    expect(JSON.parse(res.body).error.code).toBe('INVALID_FAMILY_CODE');
+    expect(JSON.parse(res.body).error.code).toBe('UNAUTHORIZED');
   });
 
   it('rejects disallowed origins with 403', async () => {
@@ -174,9 +201,8 @@ describe('recipe proxy handlers', () => {
       method: 'OPTIONS',
       headers: {
         origin: 'https://evil.example.com',
-        'x-family-code': 'family-code',
       },
-      url: '/api/recipes',
+      url: '/api/v1/recipes',
     });
     const res = makeRes();
 
@@ -186,7 +212,7 @@ describe('recipe proxy handlers', () => {
     expect(JSON.parse(res.body).error.code).toBe('CORS_FORBIDDEN');
   });
 
-  it('creates recipes through POST /api/recipes', async () => {
+  it('creates recipes through POST /api/v1/recipes', async () => {
     const createMock = vi.fn().mockResolvedValue(makePage({ appId: 'recipe_2', pageId: 'page_2', name: 'Soup' }));
     __setNotionClientForTests({
       dataSources: {
@@ -199,14 +225,14 @@ describe('recipe proxy handlers', () => {
 
     const req = makeReq({
       method: 'POST',
-      headers: { 'x-family-code': 'family-code' },
+      headers: makeAuthHeaders(),
       body: {
         name: 'Soup',
         ingredients: 'Water',
         instructions: 'Heat',
         sourceUrl: 'https://example.com/soup',
       },
-      url: '/api/recipes',
+      url: '/api/v1/recipes',
     });
     const res = makeRes();
 
@@ -218,7 +244,7 @@ describe('recipe proxy handlers', () => {
     expect(createMock.mock.calls[0][0].properties['Source URL'].url).toBe('https://example.com/soup');
   });
 
-  it('archives recipes through DELETE /api/recipes/:id', async () => {
+  it('archives recipes through DELETE /api/v1/recipes/:id', async () => {
     const updateMock = vi.fn().mockResolvedValue({});
     __setNotionClientForTests({
       dataSources: {
@@ -235,10 +261,10 @@ describe('recipe proxy handlers', () => {
 
     const req = makeReq({
       method: 'DELETE',
-      headers: { 'x-family-code': 'family-code' },
+      headers: makeAuthHeaders(),
       body: { version: 3 },
       query: { id: 'recipe_1' },
-      url: '/api/recipes/recipe_1',
+      url: '/api/v1/recipes/recipe_1',
     });
     const res = makeRes();
 
@@ -251,7 +277,7 @@ describe('recipe proxy handlers', () => {
     });
   });
 
-  it('increments the recipe version through PATCH /api/recipes/:id', async () => {
+  it('increments the recipe version through PATCH /api/v1/recipes/:id', async () => {
     const updateMock = vi.fn().mockResolvedValue(makePage({ version: 2 }));
     __setNotionClientForTests({
       dataSources: {
@@ -268,13 +294,13 @@ describe('recipe proxy handlers', () => {
 
     const req = makeReq({
       method: 'PATCH',
-      headers: { 'x-family-code': 'family-code' },
+      headers: makeAuthHeaders(),
       body: {
         version: 1,
         notes: 'Updated remotely',
       },
       query: { id: 'recipe_1' },
-      url: '/api/recipes/recipe_1',
+      url: '/api/v1/recipes/recipe_1',
     });
     const res = makeRes();
 
@@ -303,7 +329,7 @@ describe('recipe proxy handlers', () => {
 
     const req = makeReq({
       method: 'POST',
-      headers: { 'x-family-code': 'family-code' },
+      headers: makeAuthHeaders(),
       body: {
         payload: {
           schemaVersion: 5,
@@ -313,7 +339,7 @@ describe('recipe proxy handlers', () => {
           ],
         },
       },
-      url: '/api/recipes/sync',
+      url: '/api/v1/recipes/sync',
     });
     const res = makeRes();
 
@@ -353,7 +379,7 @@ describe('recipe proxy handlers', () => {
 
     const req = makeReq({
       method: 'POST',
-      headers: { 'x-family-code': 'family-code' },
+      headers: makeAuthHeaders(),
       body: {
         payload: {
           schemaVersion: 5,
@@ -367,7 +393,7 @@ describe('recipe proxy handlers', () => {
           ],
         },
       },
-      url: '/api/recipes/sync',
+      url: '/api/v1/recipes/sync',
     });
     const res = makeRes();
 
@@ -385,6 +411,123 @@ describe('recipe proxy handlers', () => {
     });
   });
 
+  it('matches no-URL recipes by name and source during sync backfill', async () => {
+    const updateMock = vi.fn().mockResolvedValue(
+      makePage({
+        appId: 'recipe_existing',
+        name: 'Existing',
+        url: '',
+        image: 'https://example.com/existing.jpg',
+        version: 2,
+      })
+    );
+    const createMock = vi.fn();
+    __setNotionClientForTests({
+      dataSources: {
+        query: vi.fn().mockResolvedValue({
+          results: [makePage({ appId: 'recipe_existing', name: 'Existing', url: '', version: 1 })],
+          has_more: false,
+          next_cursor: null,
+        }),
+      },
+      pages: {
+        create: createMock,
+        update: updateMock,
+      },
+    });
+
+    const req = makeReq({
+      method: 'POST',
+      headers: makeAuthHeaders(),
+      body: {
+        payload: {
+          schemaVersion: 5,
+          recipes: [
+            {
+              id: 'recipe_existing',
+              name: 'Existing',
+              source: 'Trattoria',
+              image: 'https://example.com/existing.jpg',
+            },
+          ],
+        },
+      },
+      url: '/api/v1/recipes/sync',
+    });
+    const res = makeRes();
+
+    await recipeSyncHandler(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(createMock).not.toHaveBeenCalled();
+    expect(updateMock).toHaveBeenCalledTimes(1);
+    expect(updateMock.mock.calls[0][0].properties.Photos.files[0].external.url).toBe('https://example.com/existing.jpg');
+    expect(JSON.parse(res.body).data).toMatchObject({
+      added: 0,
+      updated: 1,
+      duplicatesSkipped: 0,
+    });
+  });
+
+  it('rejects invalid recipe dates before creating Notion pages', async () => {
+    const createMock = vi.fn();
+    __setNotionClientForTests({
+      dataSources: {
+        query: vi.fn(),
+      },
+      pages: {
+        create: createMock,
+      },
+    });
+
+    const req = makeReq({
+      method: 'POST',
+      headers: makeAuthHeaders(),
+      body: {
+        name: 'Soup',
+        date: '2026-02-30',
+      },
+      url: '/api/v1/recipes',
+    });
+    const res = makeRes();
+
+    await recipeHandler(req, res);
+
+    expect(res.statusCode).toBe(400);
+    expect(createMock).not.toHaveBeenCalled();
+    expect(JSON.parse(res.body).error.code).toBe('VALIDATION_FAILED');
+  });
+
+  it('rejects oversized JSON bodies before parsing them', async () => {
+    process.env.MAX_JSON_BODY_BYTES = '64';
+    const createMock = vi.fn();
+    __setNotionClientForTests({
+      dataSources: {
+        query: vi.fn(),
+      },
+      pages: {
+        create: createMock,
+      },
+    });
+
+    const req = makeReq({
+      method: 'POST',
+      headers: makeAuthHeaders(),
+      body: JSON.stringify({
+        name: 'Soup',
+        notes: 'x'.repeat(256),
+      }),
+      url: '/api/v1/recipes',
+    });
+    const res = makeRes();
+
+    await recipeHandler(req, res);
+
+    expect(res.statusCode).toBe(413);
+    expect(createMock).not.toHaveBeenCalled();
+    expect(JSON.parse(res.body).error.code).toBe('PAYLOAD_TOO_LARGE');
+  });
+
   it('enforces the write rate limit with 429 on the 11th request', async () => {
     const createMock = vi.fn().mockResolvedValue(makePage({ appId: 'recipe_limit', pageId: 'page_limit', name: 'Soup' }));
     __setNotionClientForTests({
@@ -399,10 +542,10 @@ describe('recipe proxy handlers', () => {
     for (let index = 0; index < 10; index += 1) {
       const req = makeReq({
         method: 'POST',
-        headers: { 'x-family-code': 'family-code' },
+        headers: makeAuthHeaders(),
         body: { name: `Soup ${index}` },
         socket: { remoteAddress: '10.0.0.1' },
-        url: '/api/recipes',
+        url: '/api/v1/recipes',
       });
       const res = makeRes();
       await recipeHandler(req, res);
@@ -411,10 +554,10 @@ describe('recipe proxy handlers', () => {
 
     const req = makeReq({
       method: 'POST',
-      headers: { 'x-family-code': 'family-code' },
+      headers: makeAuthHeaders(),
       body: { name: 'Soup 11' },
       socket: { remoteAddress: '10.0.0.1' },
-      url: '/api/recipes',
+      url: '/api/v1/recipes',
     });
     const res = makeRes();
     await recipeHandler(req, res);
@@ -439,8 +582,8 @@ describe('recipe proxy handlers', () => {
 
     const req = makeReq({
       method: 'GET',
-      headers: { 'x-family-code': 'family-code' },
-      url: '/api/recipes',
+      headers: makeAuthHeaders(),
+      url: '/api/v1/recipes',
     });
     const res = makeRes();
 

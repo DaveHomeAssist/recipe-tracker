@@ -1,6 +1,7 @@
 import { handleCorsPreflight, methodNotAllowed, readJsonBody, rejectDisallowedOrigin, sendError, sendJson, sendNoContent } from '../../../src/server/http.js';
 import { requireSession } from '../../../src/server/require-session.js';
-import { deleteRecipe, updateRecipe } from '../../../src/server/recipes-service.js';
+import { enforceWriteRateLimit } from '../../../src/server/write-rate-limit.js';
+import { deleteRecipe, getRecipe, updateRecipe } from '../../../src/server/recipes-service.js';
 
 export default async function handler(req, res) {
   if (handleCorsPreflight(req, res)) return;
@@ -14,7 +15,18 @@ export default async function handler(req, res) {
       return;
     }
 
+    if (req.method === 'GET') {
+      const recipe = await getRecipe(id);
+      sendJson(req, res, 200, {
+        data: {
+          recipe,
+        },
+      });
+      return;
+    }
+
     if (req.method === 'PATCH') {
+      if (!enforceWriteRateLimit(req, res)) return;
       const body = await readJsonBody(req);
       const recipe = await updateRecipe(id, body);
       sendJson(req, res, 200, {
@@ -28,15 +40,15 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'DELETE') {
+      if (!enforceWriteRateLimit(req, res)) return;
       const body = await readJsonBody(req);
       await deleteRecipe(id, body.version);
       sendNoContent(req, res, 204);
       return;
     }
 
-    methodNotAllowed(req, res, ['PATCH', 'DELETE', 'OPTIONS']);
+    methodNotAllowed(req, res, ['GET', 'PATCH', 'DELETE', 'OPTIONS']);
   } catch (error) {
-    console.error('recipe item handler failed:', error);
     sendError(
       req,
       res,

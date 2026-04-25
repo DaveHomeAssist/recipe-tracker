@@ -25,6 +25,11 @@ export const __setNotionClientForTests = (client) => {
   notionClientOverride = client;
 };
 
+export const getNotionConfigStatus = () => ({
+  accessToken: process.env.NOTION_ACCESS_TOKEN ? 'configured' : 'unconfigured',
+  dataSourceId: process.env.NOTION_DATA_SOURCE_ID ? 'configured' : 'unconfigured',
+});
+
 const getNotionClient = () => {
   const token = process.env.NOTION_ACCESS_TOKEN;
   if (!token) throw new Error('Missing NOTION_ACCESS_TOKEN');

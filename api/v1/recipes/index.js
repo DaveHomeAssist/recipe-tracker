@@ -1,5 +1,6 @@
 import { handleCorsPreflight, methodNotAllowed, readJsonBody, rejectDisallowedOrigin, sendError, sendJson } from '../../../src/server/http.js';
 import { requireSession } from '../../../src/server/require-session.js';
+import { enforceWriteRateLimit } from '../../../src/server/write-rate-limit.js';
 import { createRecipe, listRecipes } from '../../../src/server/recipes-service.js';
 
 export default async function handler(req, res) {
@@ -21,6 +22,7 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'POST') {
+      if (!enforceWriteRateLimit(req, res)) return;
       const body = await readJsonBody(req);
       const recipe = await createRecipe(body);
       sendJson(req, res, 201, {
@@ -35,7 +37,6 @@ export default async function handler(req, res) {
 
     methodNotAllowed(req, res, ['GET', 'POST', 'OPTIONS']);
   } catch (error) {
-    console.error('recipes index handler failed:', error);
     sendError(
       req,
       res,
