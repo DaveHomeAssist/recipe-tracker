@@ -2,6 +2,13 @@
 
 All notable user-facing changes to Our Recipe Journal.
 
+## 2026-08-06 — Remote API recovery guardrails
+
+### Changed
+- Documented GitHub Pages as the canonical UI and Vercel as the remote API host.
+- Capped Vercel functions at 10 seconds and disabled Fluid Compute for the deployment.
+- Rate-limited client error reports to reduce runaway invocation and log volume.
+
 ## 2026-04-15 — Test harness, Phase 1 patches, a11y pass
 
 ### Added

@@ -464,4 +464,25 @@ describe('recipe proxy handlers', () => {
     expect(res.statusCode).toBe(403);
     expect(JSON.parse(res.body).error.code).toBe('CORS_FORBIDDEN');
   });
+
+  it('rate limits repeated client error reports', async () => {
+    const request = () => makeReq({
+      method: 'POST',
+      headers: { origin: 'https://davehomeassist.github.io' },
+      body: { kind: 'error', message: 'boom' },
+      url: '/api/log/client-error',
+    });
+
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const res = makeRes();
+      await clientErrorHandler(request(), res);
+      expect(res.statusCode).toBe(204);
+    }
+
+    const res = makeRes();
+    await clientErrorHandler(request(), res);
+
+    expect(res.statusCode).toBe(429);
+    expect(JSON.parse(res.body).error.code).toBe('RATE_LIMITED');
+  });
 });

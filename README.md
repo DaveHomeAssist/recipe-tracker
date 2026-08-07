@@ -1,6 +1,13 @@
 # Our Recipe Journal
 
-A shared family recipe journal. Single-file static web app, no backend, no build tooling. Hosted on GitHub Pages at https://davehomeassist.github.io/recipe-tracker/.
+A shared family recipe journal with a static GitHub Pages UI and an optional Vercel API for authenticated household sync. There is no frontend build step.
+
+## Production surfaces
+
+- **Canonical UI:** https://davehomeassist.github.io/recipe-tracker/
+- **Remote API:** https://recipe-tracker-beta.vercel.app/api
+
+GitHub Pages is the user-facing application host. Vercel is the API host only; a failure at the Vercel root means remote sync is unavailable, not that the static journal itself is offline.
 
 ## What it does
 
@@ -36,7 +43,8 @@ src/
 service-worker.js       offline cache + update handling
 manifest.webmanifest    install metadata
 favicon.svg             app icon for browser + manifest
-build/                  one-shot extractor + (planned) Vercel proxy, not served
+api/                    authenticated Vercel API for Notion-backed household sync
+build/                  one-shot recipe extractor, not served
 tests/
   unit/                 Vitest (jsdom) — helpers
   integration/          Vitest (jsdom) — render pipeline + stored XSS
