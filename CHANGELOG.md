@@ -2,6 +2,14 @@
 
 All notable user-facing changes to Our Recipe Journal.
 
+## 2026-08-26 — CI workflow and backup re-enable (audit remediation)
+
+### Added
+- **CI workflow** (`.github/workflows/ci.yml`): unit, integration, and browser tests now run on every push and pull request (audit M-1, `2524cc9`).
+
+### Changed
+- **Backup workflow re-enabled** (`.github/workflows/backup.yml`); runs remain blocked until the Notion secrets are configured in the repository settings.
+
 ## 2026-08-06 — Remote API recovery guardrails
 
 ### Changed
