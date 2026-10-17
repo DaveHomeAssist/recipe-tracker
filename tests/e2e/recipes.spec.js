@@ -246,8 +246,13 @@ test('card tags add an active filter', async ({ page }) => {
 });
 
 test('editing preserves cuisines outside the default select list', async ({ page }) => {
-  await page.goto('/index.html');
-  await page.evaluate(() => {
+  // Seed storage before any app script runs. Writing it after a first
+  // page.goto() raced the app's async seed-image migration, which could
+  // persist the 187 default recipes over this fixture (flaky 187 vs 1).
+  // The sessionStorage guard keeps later reloads from re-seeding.
+  await page.addInitScript(() => {
+    if (sessionStorage.getItem('__seeded_custom_british')) return;
+    sessionStorage.setItem('__seeded_custom_british', '1');
     localStorage.setItem('recipe_journal_v3', JSON.stringify({
       recipes: [{
         id: 'custom-british',
@@ -280,7 +285,7 @@ test('editing preserves cuisines outside the default select list', async ({ page
     }));
     localStorage.removeItem('recipe_journal_schema_version');
   });
-  await page.reload();
+  await page.goto('/index.html');
 
   await expect(page.locator('.recipe-grid .card')).toHaveCount(1);
   await page.locator('.recipe-grid .card').first().click();
