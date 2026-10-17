@@ -15,8 +15,7 @@ name: Nightly Notion backup
 # s3 / blob modes are the production targets.
 
 on:
-  schedule:
-    - cron: '17 7 * * *' # 07:17 UTC daily = 03:17 ET in summer, 02:17 ET in winter
+
   workflow_dispatch:
 
 permissions:
