@@ -16,7 +16,7 @@
     "@notionhq/client": "^5.14.0"
   },
   "devDependencies": {
-    "@playwright/test": "^1.49.1",
+    "@playwright/test": "^1.63.0",
     "jsdom": "^25.0.1",
     "vitest": "^4.1.11"
   }
