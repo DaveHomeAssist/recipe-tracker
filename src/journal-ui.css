@@ -1,0 +1,364 @@
+:root {
+  color-scheme: light;
+  --journal-paper: #f6f4ec;
+  --journal-surface: #fffdf7;
+  --journal-ink: #172f27;
+  --journal-muted: #4d6157;
+  --journal-border: #ccd3c7;
+  --journal-wash: #e9eee4;
+  --journal-action: #205e4b;
+  --journal-on-action: #fff;
+  --journal-highlight: #926022;
+  --journal-danger: #a23832;
+  --journal-focus: #80570b;
+  --journal-font: 'Lato', system-ui, sans-serif;
+  --journal-display: 'Playfair Display', Georgia, serif;
+  --journal-gutter: clamp(12px, 3vw, 48px);
+  --journal-bottom: env(safe-area-inset-bottom, 0px);
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --journal-paper: #11201b;
+  --journal-surface: #192c24;
+  --journal-ink: #f2f3e7;
+  --journal-muted: #c2d1c3;
+  --journal-border: #435c4f;
+  --journal-wash: #243c31;
+  --journal-action: #a5dbc5;
+  --journal-on-action: #102a21;
+  --journal-highlight: #f1c88a;
+  --journal-danger: #ffb6ae;
+  --journal-focus: #f1c88a;
+}
+html, body.library-page, body.kitchen-page {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+body.library-page, body.kitchen-page {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  min-height: 0;
+  margin: 0;
+  background: var(--journal-paper);
+  color: var(--journal-ink);
+  font: 400 1rem/1.5 var(--journal-font);
+}
+.library-page {
+  --cream: var(--journal-paper);
+  --warm-white: var(--journal-surface);
+  --espresso: var(--journal-ink);
+  --ink: var(--journal-ink);
+  --parchment: var(--journal-border);
+  --gold: var(--journal-highlight);
+  --sage: var(--journal-muted);
+  --rust: var(--journal-danger);
+}
+.kitchen-page {
+  --bg: var(--journal-paper);
+  --surface: var(--journal-surface);
+  --text: var(--journal-ink);
+  --muted: var(--journal-muted);
+  --border: var(--journal-border);
+  --chip: var(--journal-wash);
+  --accent: var(--journal-action);
+  --accent-dk: var(--journal-action);
+  --danger: var(--journal-danger);
+}
+.app-masthead {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: clamp(12px, 3vw, 42px);
+  padding: 8px var(--journal-gutter);
+  background: var(--journal-surface);
+  border-bottom: 1px solid var(--journal-border);
+}
+.app-brand {
+  color: var(--journal-ink);
+  font: 700 clamp(1.05rem, 2vw, 1.5rem)/1.1 var(--journal-display);
+  text-decoration: none;
+}
+.app-nav { display: flex; gap: 4px; }
+.app-nav a, .theme-toggle {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 13px;
+  color: var(--journal-ink);
+  font: 700 .85rem/1.2 var(--journal-font);
+  text-decoration: none;
+  white-space: nowrap;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+}
+.app-nav a[aria-current="page"], .app-nav a:hover, .theme-toggle:hover {
+  background: var(--journal-wash);
+  border-color: var(--journal-border);
+}
+.theme-toggle { margin-inline-start: auto; border-color: var(--journal-border); cursor: pointer; }
+.library-page :focus-visible, .kitchen-page :focus-visible {
+  outline: 2px solid var(--journal-focus);
+  outline-offset: 2px;
+}
+.library-page .skip-link:not(:focus) { top: -100px; }
+.library-page #main, .kitchen-page .layout {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  max-width: none;
+}
+.library-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px 24px;
+  padding: clamp(12px, 3vh, 30px) var(--journal-gutter) 8px;
+}
+.library-heading h1, .kitchen-page .page h1 {
+  color: var(--journal-ink);
+  font: 700 clamp(1.65rem, 4vw, 3.25rem)/1.12 var(--journal-display);
+  letter-spacing: -.035em;
+}
+.library-heading .stats-bar { margin: 0; padding: 0; gap: 12px; }
+.library-page .toolbar {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) auto;
+  align-items: start;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 6px var(--journal-gutter) 10px;
+  gap: 8px 16px;
+}
+.library-page .search-wrap { min-width: 0; }
+.library-page .search-wrap::before { display: none; }
+.library-page .search-wrap input { min-height: 44px; padding: 8px 12px; font-size: 1rem; }
+.library-page .toolbar-actions { grid-column: 2; grid-row: 1; }
+.library-page .filter-cluster { grid-column: 1 / -1; gap: 5px; min-width: 0; }
+.library-page .filter-row {
+  display: grid;
+  grid-template-columns: 66px minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+}
+.library-page .filter-row-label { padding-top: 0; }
+.library-page .filter-btns {
+  flex-wrap: nowrap;
+  gap: 5px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  padding: 3px;
+}
+.library-page .filter-btn { flex-shrink: 0; white-space: nowrap; padding: 6px 11px; }
+.library-page .active-filters { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; }
+.library-page .active-filters > * { flex-shrink: 0; }
+.library-page .active-filter-chip { background: var(--journal-wash); }
+.library-page .recipe-grid {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 12px var(--journal-gutter) 24px;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 245px), 1fr));
+  grid-auto-rows: max-content;
+  align-content: start;
+  overflow: auto;
+  overscroll-behavior: contain;
+  gap: clamp(10px, 1.5vw, 24px);
+  border-top: 1px solid var(--journal-border);
+}
+.library-page .card {
+  min-width: 0;
+  border-color: var(--journal-border);
+  border-radius: 9px;
+  box-shadow: none;
+  animation-delay: 0s !important;
+}
+.library-page .card:hover, .library-page .card:active {
+  transform: none;
+  box-shadow: 0 3px 14px #142e2021;
+  border-color: var(--journal-action);
+}
+.library-page .card-image { aspect-ratio: 16 / 10; background: var(--journal-wash); }
+.library-page .card-image-empty { display: none; }
+.library-page .card-body { padding: 12px 14px; }
+.library-page .card-title { color: var(--journal-ink); overflow-wrap: anywhere; }
+.library-page .card-notes, .library-page .view-val { color: var(--journal-muted); }
+.library-page .card-link { display: none; }
+.library-page .card-footer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  margin-top: auto;
+}
+.library-page .card-tags {
+  min-width: 0;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  padding: 3px;
+}
+.library-page .card-tags > * { flex: 0 0 auto; white-space: nowrap; }
+.library-page .card-actions { gap: 2px; }
+.library-page .card-actions .icon-btn { opacity: .85; }
+.library-page .card-cuisine { color: var(--journal-muted); }
+.library-page .add-btn-primary, .library-page .btn-primary, .kitchen-page .btn,
+.kitchen-page nav.tabs button.active {
+  background: var(--journal-action);
+  border-color: var(--journal-action);
+  color: var(--journal-on-action);
+  box-shadow: none;
+}
+.library-page .btn-danger { color: var(--journal-danger); }
+.library-page .btn-secondary, .library-page .btn-toolbar, .library-page .add-btn,
+.library-page .btn-primary { min-height: 44px; }
+.library-page .modal-header h2, .library-page .view-title { font-family: var(--journal-display); }
+.library-page .modal-footer { flex-wrap: wrap; }
+.kitchen-page .layout { padding: 0 var(--journal-gutter); }
+.kitchen-page header.page {
+  margin: 0;
+  padding: clamp(10px, 2vh, 22px) 0;
+  flex: 0 0 auto;
+}
+.kitchen-page nav.tabs { border-radius: 8px; padding: 3px; }
+.kitchen-page nav.tabs button { min-height: 40px; border-radius: 6px; }
+.kitchen-page .panel.active {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  margin: 0;
+  padding: 0 3px 16px;
+}
+.kitchen-page .card { padding: clamp(12px, 2vw, 24px); }
+.kitchen-page .card h2 { margin-top: 0; color: var(--journal-ink); }
+.kitchen-page .btn { min-height: 44px; border-radius: 6px; }
+.kitchen-page .btn.ghost { color: var(--journal-action); background: transparent; }
+.kitchen-page .btn.ghost:hover { background: var(--journal-wash); }
+.kitchen-page .plan-scroll { overflow-x: auto; }
+.kitchen-page .plan-grid { min-width: 560px; }
+.kitchen-page .plan-slot { cursor: default; }
+.kitchen-page .plan-slot:hover { background: var(--journal-wash); }
+.kitchen-page .recipe-row {
+  width: 100%;
+  min-height: 48px;
+  border: 0;
+  border-bottom: 1px solid var(--journal-border);
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+}
+.kitchen-page .recipe-search { font-size: 1rem; color: var(--journal-ink); }
+.kitchen-page .modal-close { min-width: 44px; min-height: 44px; }
+.kitchen-page .cook-overlay { z-index: 100; }
+.kitchen-page .timer-bar {
+  z-index: 110;
+  background: var(--journal-action);
+  color: var(--journal-on-action);
+}
+.kitchen-page .flash { background: var(--journal-wash); }
+@media (max-width: 760px) {
+  .app-masthead { min-height: 52px; justify-content: space-between; }
+  .app-nav {
+    position: fixed;
+    z-index: 20;
+    inset: auto 0 0;
+    justify-content: center;
+    padding: 4px 12px calc(4px + var(--journal-bottom));
+    border-top: 1px solid var(--journal-border);
+    background: var(--journal-surface);
+  }
+  .app-nav a { flex: 1; max-width: 180px; }
+  .library-page #main, .kitchen-page .layout { padding-bottom: calc(52px + var(--journal-bottom)); }
+  .library-heading { flex-wrap: wrap; gap: 4px 12px; }
+  .library-heading .stats-bar { font-size: .8rem; }
+  .library-page .toolbar { grid-template-columns: minmax(0, 1fr); }
+  .library-page .toolbar-actions {
+    grid-column: 1;
+    grid-row: 2;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding: 3px;
+    scrollbar-width: thin;
+  }
+  .library-page .toolbar-actions > button { flex-shrink: 0; padding: 6px 11px; }
+  .library-page .filter-row { grid-template-columns: 52px minmax(0, 1fr); }
+  .library-page .filter-btn { min-height: 36px; }
+  .library-page .recipe-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .library-page .card-body { padding: 8px; }
+  .library-page .card-title { font-size: 1rem; }
+  .library-page .card-meta { flex-wrap: wrap; gap: 2px; }
+  .library-page .card-notes { display: none; }
+  .library-page .card-footer {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+    padding: 4px 8px;
+  }
+  .library-page .card-actions { justify-content: flex-end; }
+  .kitchen-page nav.tabs { width: 100%; order: 3; }
+  .kitchen-page .timer-bar { bottom: calc(52px + var(--journal-bottom)); }
+  .kitchen-page .cook-overlay { padding-bottom: calc(100px + var(--journal-bottom)); }
+}
+@media (max-width: 360px) {
+  .library-page .recipe-grid { grid-template-columns: 1fr; }
+}
+@media (max-height: 530px) and (orientation: landscape) {
+  .library-heading { padding-block: 4px; }
+  .library-page .toolbar { grid-template-columns: minmax(160px, 1fr) auto; }
+  .library-page .toolbar-actions { grid-column: 2; grid-row: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .kitchen-page *, .kitchen-page *::before, .kitchen-page *::after { animation: none !important; }
+}
+@media print {
+  html, body.library-page { height: auto; overflow: visible; background: #fff; color: #000; }
+  .library-page:has(#viewModal.open) > :not(#viewModal) { display: none !important; }
+  .library-page #viewModal.open, .library-page #viewModal.open .modal {
+    display: block;
+    position: static;
+    width: auto;
+    max-width: none !important;
+    max-height: none;
+    overflow: visible;
+    padding: 0;
+    transform: none;
+    border: 0;
+    box-shadow: none;
+    background: #fff;
+    color: #000;
+  }
+  .library-page #viewModal .modal-header, .library-page #viewModal .modal-body { padding: 0; }
+  .library-page #viewModal .close-btn, .library-page #viewModal .modal-footer { display: none; }
+  .library-page #viewModal .view-title, .library-page #viewModal .view-label,
+  .library-page #viewModal .view-val, .library-page #viewModal a { color: #000; }
+  .library-page #viewModal .view-field { overflow-wrap: anywhere; }
+}
+
+.library-page #cookViewLink:not([hidden]) {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+
+.library-page .modal-overlay:not(.open) { visibility: hidden; }
+.kitchen-page .plan-add {
+  min-height: 34px;
+  width: 100%;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--journal-action);
+  font: 700 .78rem var(--journal-font);
+  text-align: start;
+  cursor: pointer;
+}
+.kitchen-page .plan-add:hover { background: var(--journal-wash); }

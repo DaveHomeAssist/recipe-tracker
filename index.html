@@ -6,7 +6,6 @@
 <title>Our Recipe Journal</title>
 <meta name="description" content="A shared family recipe journal — tastes from restaurants, travels, and kitchens we love. Search, filter, and save the recipes we cook at home.">
 <meta name="theme-color" content="#b5541c">
-<meta name="color-scheme" content="light">
 <link rel="canonical" href="https://davehomeassist.github.io/recipe-tracker/">
 <link rel="icon" type="image/svg+xml" href="./favicon.svg">
 <link rel="manifest" href="./manifest.webmanifest">
@@ -381,19 +380,27 @@
     }
   }
 </style>
+<link rel="stylesheet" href="./src/journal-ui.css">
+<script defer src="./src/journal-theme.js"></script>
 </head>
-<body>
+<body class="library-page">
 
 <a class="skip-link" href="#main">Skip to recipes</a>
 
-<header>
-  <div class="header-eyebrow">a shared collection</div>
-  <h1>Our <em>Recipe</em> Journal</h1>
-  <div class="header-sub">Tastes from restaurants, travels &amp; kitchens we love</div>
-</header>
+<div class="app-masthead">
+  <a class="app-brand" href="./index.html" aria-label="Recipe Journal home">Recipe Journal</a>
+  <nav class="app-nav" aria-label="Recipe Journal">
+    <a href="./index.html" aria-current="page">Library</a>
+    <a href="./kitchen.html">Kitchen</a>
+  </nav>
+  <button class="theme-toggle" data-theme-toggle type="button">Dark mode</button>
+</div>
 
-<!-- TOOLBAR -->
-<main id="main">
+<main id="main" tabindex="-1">
+<div class="library-heading">
+  <h1>Recipe library</h1>
+  <div class="stats-bar" id="statsBar" aria-live="polite"></div>
+</div>
 <div class="toolbar" role="toolbar" aria-label="Recipe toolbar">
   <div class="search-wrap">
     <label for="searchInput" class="visually-hidden">Search recipes</label>
@@ -412,17 +419,15 @@
     <div class="active-filters" id="activeFilters" aria-live="polite"></div>
   </div>
   <div class="toolbar-actions">
-    <button class="add-btn add-btn-primary" id="openAddBtn" type="button">✏️ Add Recipe</button>
-    <button class="btn-toolbar" id="openTagManagerBtn" type="button" aria-label="Manage tags">🏷️ Manage Tags</button>
+    <button class="add-btn add-btn-primary" id="openAddBtn" type="button">Add Recipe</button>
+    <button class="btn-toolbar" id="openTagManagerBtn" type="button" aria-label="Manage tags">Manage Tags</button>
     <button class="btn-toolbar" id="exportBtn" type="button" aria-label="Export all recipes as a JSON file">⇩ Export</button>
     <button class="btn-toolbar" id="importBtn" type="button" aria-label="Import recipes from a JSON file">⇧ Import</button>
     <button class="btn-toolbar" id="syncToNotionBtn" type="button" aria-label="Sync the local library to Notion" hidden>☁️ Sync to Notion</button>
     <input type="file" id="importFile" accept="application/json,.json" hidden>
   </div>
 </div>
-</div>
 
-<div class="stats-bar" id="statsBar" aria-live="polite"></div>
 <div class="recipe-grid" id="recipeGrid" role="list" aria-label="Recipe grid"></div>
 </main>
 
@@ -485,16 +490,18 @@
 
 <!-- VIEW MODAL -->
 <div class="modal-overlay" id="viewModal">
-  <div class="modal" style="max-width:640px;">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="v-name" style="max-width:640px;">
     <div class="modal-header">
       <div>
-        <div class="view-title" id="v-name"></div>
+        <h2 class="view-title" id="v-name"></h2>
         <div class="view-subtitle" id="v-sub"></div>
       </div>
-      <button class="close-btn" id="closeViewBtn">✕</button>
+      <button class="close-btn" id="closeViewBtn" aria-label="Close recipe">✕</button>
     </div>
     <div class="modal-body" id="viewBody"></div>
     <div class="modal-footer">
+      <a class="btn-secondary" id="cookViewLink" href="./kitchen.html" hidden>Cook this recipe</a>
+      <button class="btn-secondary" id="printViewBtn" type="button">Print recipe</button>
       <button class="btn-danger" id="deleteViewBtn">Delete</button>
       <button class="btn-secondary" id="editViewBtn">Edit</button>
       <button class="btn-primary" id="closeView2Btn">Close</button>
@@ -936,7 +943,7 @@ function renderGrid() {
     c.setAttribute('role', 'listitem');
     c.setAttribute('tabindex', '0');
     c.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter' || event.key === ' ') {
+      if (event.target === c && (event.key === 'Enter' || event.key === ' ')) {
         event.preventDefault();
         openView(c.dataset.id);
       }
@@ -2166,8 +2173,11 @@ document.getElementById('tagManagerModal').addEventListener('click', (event) => 
 // ══════════════════════════════════════════════
 function openView(id) {
   const r=recipes.find(x=>sameId(x.id, id)); if(!r) return;
-  scrollBeforeModal = window.scrollY;
+  scrollBeforeModal = document.getElementById('recipeGrid').scrollTop;
   viewingId=id;
+  const cookLink = document.getElementById('cookViewLink');
+  cookLink.hidden = !r.ingredients?.trim() || !r.instructions?.trim();
+  cookLink.href = './kitchen.html#' + new URLSearchParams({ cook: String(r.id) });
   prefs = recordView(id, prefs);
   document.getElementById('v-name').textContent=r.name;
   document.getElementById('v-sub').innerHTML=`${escapeHtml(r.cuisine||'')}${r.source?' · '+escapeHtml(r.source):''}${r.location?' · '+escapeHtml(r.location):''}&nbsp;&nbsp;${stars(r.rating||0)}`;
@@ -2192,6 +2202,7 @@ function openView(id) {
 }
 document.getElementById('closeViewBtn').addEventListener('click',()=>closeModal('viewModal'));
 document.getElementById('closeView2Btn').addEventListener('click',()=>closeModal('viewModal'));
+document.getElementById('printViewBtn').addEventListener('click', () => window.print());
 document.getElementById('editViewBtn').addEventListener('click',()=>openEdit(viewingId));
 document.getElementById('deleteViewBtn').addEventListener('click',()=>{ del(viewingId); closeModal('viewModal'); });
 
@@ -2257,7 +2268,7 @@ function closeModal(id) {
   const el = document.getElementById(id);
   el.classList.remove('open');
   if (id === 'viewModal') {
-    setTimeout(() => window.scrollTo({ top: scrollBeforeModal, behavior: 'auto' }), 50);
+    document.getElementById('recipeGrid').scrollTop = scrollBeforeModal;
   }
   // Restore focus to whatever opened the modal.
   if (lastFocusedBeforeModal && document.contains(lastFocusedBeforeModal)) {
