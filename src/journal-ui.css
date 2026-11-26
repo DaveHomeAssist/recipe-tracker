@@ -247,6 +247,17 @@ body.library-page, body.kitchen-page {
   aspect-ratio: 16 / 10;
   background: var(--journal-wash) url("../assets/recipe-library/card-placeholder.webp") center / cover no-repeat;
 }
+.library-page .inspector-photo {
+  display: block;
+  width: 100%;
+  max-height: min(34vh, 300px);
+  margin-bottom: 16px;
+  border-radius: 8px;
+  object-fit: cover;
+}
+@media print {
+  .library-page .inspector-photo { display: none; }
+}
 .library-page .empty-state:has(.empty-search-art) { padding-block: 16px 24px; }
 .empty-search-art {
   display: block;

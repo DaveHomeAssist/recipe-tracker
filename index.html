@@ -584,7 +584,7 @@ import {
 import { filtered as filteredRecipes, renderGridHtml, statsFor, stars } from './src/recipe-render.js';
 import { renderThanksgivingMenu } from './src/thanksgiving.js';
 import { validateImport } from './src/recipe-schema.js';
-import { mergeSeedImages } from './src/seed-images.js';
+import { loadSeedImageLookup, mergeSeedImages } from './src/seed-images.js';
 import { createRecipeApi } from './src/recipe-api.js';
 import { installGlobalErrorReporting } from './src/client-error-reporting.js';
 import { loadStoredFamilyCode } from './src/family-code-storage.js';
@@ -982,22 +982,61 @@ function renderStats() {
      ${s.locations ? `<div class="stat-chip"><strong>${s.locations}</strong> ${s.locations === 1 ? 'location' : 'locations'}</div>` : ''}`;
 }
 
+let sourceRecipePhoto = () => '';
+
+function watchRecipePhoto(image, fallback, onMissing) {
+  const handleError = () => {
+    if (fallback && image.src !== fallback) {
+      image.src = fallback;
+      return;
+    }
+    image.removeEventListener('error', handleError);
+    onMissing();
+  };
+  image.addEventListener('error', handleError);
+  if (image.complete && !image.naturalWidth) handleError();
+}
+
+async function loadRecipePhotos() {
+  try {
+    sourceRecipePhoto = await loadSeedImageLookup({ publicSources: true });
+    const focused = document.activeElement?.closest('.recipe-grid .card')?.dataset.id;
+    const scroller = recipeScroller();
+    const scroll = scroller.scrollTop;
+    renderGrid();
+    scroller.scrollTop = scroll;
+    if (focused) {
+      recipeGrid.querySelector('.card[data-id="' + CSS.escape(focused) + '"]')
+        ?.focus({ preventScroll: true });
+    }
+    refreshInspector();
+  } catch {
+    // Recipes still render when the photo catalog is unavailable.
+  }
+}
+
 function renderGrid() {
   const g = document.getElementById('recipeGrid');
   if (bootError && !recipes.length) {
     g.innerHTML = `<div class="empty-state"><div class="ei">☁️</div><p>${escapeHtml(bootError)}</p></div>`;
     return;
   }
+  const sourcePhotos = new Map();
+  const displayRecipes = recipes.map((recipe) => {
+    const source = sourceRecipePhoto(recipe.url);
+    if (!source) return recipe;
+    sourcePhotos.set(String(recipe.id), source);
+    return safeUrl(recipe.image) ? recipe : { ...recipe, image: source };
+  });
   g.innerHTML = thanksgivingMode
-    ? renderThanksgivingMenu(recipes, tagRegistry)
-    : renderGridHtml(recipes, { filters, tagRegistry });
+    ? renderThanksgivingMenu(displayRecipes, tagRegistry)
+    : renderGridHtml(displayRecipes, { filters, tagRegistry });
   for (const image of g.querySelectorAll('.card-image img')) {
-    const showPlaceholder = () => {
+    const source = sourcePhotos.get(image.closest('.card')?.dataset.id);
+    watchRecipePhoto(image, source, () => {
       image.parentElement.classList.add('card-image-empty');
       image.remove();
-    };
-    if (image.complete && !image.naturalWidth) showPlaceholder();
-    else image.addEventListener('error', showPlaceholder, { once: true });
+    });
   }
   g.querySelectorAll('.card').forEach(el=>el.addEventListener('click',e=>{
     if(e.target.closest('.edit-btn')||e.target.closest('.del-btn')) return;
@@ -1616,19 +1655,6 @@ async function loadPublicLibrary() {
   bootError = '';
   render();
 
-  try {
-    const result = await mergeSeedImages(items, { publicSources: true });
-    if (!readerMode || recipes !== items || !result.changed) return;
-    const focusedRecipe = document.activeElement?.closest('.recipe-grid .card')?.dataset.id;
-    recipes = result.recipes;
-    renderGrid();
-    if (focusedRecipe) {
-      document.querySelector('.recipe-grid .card[data-id="' + CSS.escape(focusedRecipe) + '"]')
-        ?.focus({ preventScroll: true });
-    }
-  } catch {
-    // The public library remains usable if the photo catalog is unavailable.
-  }
 }
 
 async function syncRemoteRecipes({ allowPrompt = true } = {}) {
@@ -2445,7 +2471,10 @@ function renderInspector(r) {
   document.getElementById('v-sub').innerHTML = [subtitle, r.rating ? stars(r.rating) : ''].filter(Boolean).join(' · ');
   const ingHtml=(r.ingredients||'').split(/\n/).map((line) => line.trim()).filter(Boolean).map(i=>`<li>${escapeHtml(tidyIngredientLine(i))}</li>`).join('');
   const linkUrl=safeUrl(r.url);
+  const sourcePhoto = sourceRecipePhoto(r.url);
+  const photo = safeUrl(r.image) || sourcePhoto;
   inspectorBody.innerHTML=`
+    ${photo ? `<img class="inspector-photo" src="${escapeHtml(photo)}" alt="" decoding="async" referrerpolicy="no-referrer">` : ''}
     ${(r.date||r.preptime||r.cooktime||r.servings)?`
     <div style="display:flex;gap:20px;flex-wrap:wrap;margin-bottom:16px;">
       ${r.date?`<div class="view-field" style="margin:0"><div class="view-label">Date Tried</div><div class="view-val">${escapeHtml(r.date)}</div></div>`:''}
@@ -2463,6 +2492,8 @@ function renderInspector(r) {
     ${(r.tags || []).length ? `<hr class="view-divider"><div class="view-tags">${getRecipeTagLabels(r.tags, tagRegistry).map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join('')}</div>` : ''}
     ${linkUrl?`<hr class="view-divider"><div class="view-field"><div class="view-label">Original Source URL</div><div class="view-val"><a href="${escapeHtml(linkUrl)}" target="_blank" rel="noopener noreferrer">🔗 ${escapeHtml(linkUrl)}</a></div></div>`:''}
   `;
+  const image = inspectorBody.querySelector('.inspector-photo');
+  if (image) watchRecipePhoto(image, sourcePhoto, () => image.remove());
 }
 document.getElementById('closeViewBtn').addEventListener('click', () => closeInspector());
 document.getElementById('backToRecipesBtn').addEventListener('click', () => closeInspector());
@@ -2808,6 +2839,7 @@ async function registerServiceWorker() {
 })();
 
 render();
+void loadRecipePhotos();
 if (!REMOTE_MODE && initialSchemaVersion < SCHEMA_VERSION) {
   migrateSeedImagesIfNeeded();
 }
