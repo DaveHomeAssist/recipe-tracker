@@ -381,6 +381,7 @@
   }
 </style>
 <link rel="stylesheet" href="./src/journal-ui.css">
+<link rel="stylesheet" href="./src/cuisine-headers.css">
 <script defer src="./src/journal-theme.js"></script>
 <script defer src="./src/black-friday.js"></script>
 </head>
@@ -391,8 +392,9 @@
 <div class="app-masthead">
   <a class="app-brand" href="./index.html" aria-label="Recipe Journal home">Recipe Journal</a>
   <nav class="app-nav" aria-label="Recipe Journal">
-    <a href="./index.html" aria-current="page">Library</a>
+    <a href="./index.html" id="libraryTab" aria-current="page">Library</a>
     <a href="./kitchen.html">Kitchen</a>
+    <a href="./index.html?collection=thanksgiving" id="thanksgivingTab">Thanksgiving</a>
     <a href="./black-friday.html" data-black-friday-nav hidden>Black Friday</a>
   </nav>
   <button class="theme-toggle" data-theme-toggle type="button">Dark mode</button>
@@ -401,7 +403,7 @@
 <main id="main" tabindex="-1">
 <div class="library-browser" id="libraryBrowser">
 <div class="library-heading">
-  <h1>Recipe library</h1>
+  <h1 id="libraryTitle">Recipe library</h1>
   <div class="stats-bar" id="statsBar" aria-live="polite"></div>
 </div>
 <div class="toolbar" role="toolbar" aria-label="Recipe toolbar">
@@ -574,6 +576,7 @@ import {
   tidyIngredientLine,
 } from './src/recipe-lib.js';
 import { filtered as filteredRecipes, renderGridHtml, statsFor, stars } from './src/recipe-render.js';
+import { renderThanksgivingMenu } from './src/thanksgiving.js';
 import { validateImport } from './src/recipe-schema.js';
 import { mergeSeedImages } from './src/seed-images.js';
 import { createRecipeApi } from './src/recipe-api.js';
@@ -780,6 +783,20 @@ const inspectorBody = document.getElementById('viewBody');
 const inspectorActions = document.getElementById('recipeActions');
 const libraryBrowser = document.getElementById('libraryBrowser');
 const recipeGrid = document.getElementById('recipeGrid');
+const thanksgivingMode = new URLSearchParams(location.search).get('collection') === 'thanksgiving';
+const libraryTitle = document.getElementById('libraryTitle');
+const libraryHeading = libraryTitle.parentElement;
+if (thanksgivingMode) {
+  document.body.classList.add('thanksgiving-mode');
+  document.title = 'Thanksgiving · Recipe Journal';
+  libraryTitle.textContent = 'Thanksgiving';
+  libraryTitle.tabIndex = -1;
+  document.getElementById('libraryTab').removeAttribute('aria-current');
+  document.getElementById('thanksgivingTab').setAttribute('aria-current', 'page');
+  recipeGrid.removeAttribute('role');
+  recipeGrid.removeAttribute('aria-label');
+}
+
 let inspectorIdentity = null;
 let compactGridScroll = 0;
 let pendingRecipeDelete = null;
@@ -939,8 +956,18 @@ if (!REMOTE_MODE && initialDataState.hasStoredState && initialDataState.requires
 // ══════════════════════════════════════════════
 // RENDER — thin wrapper. Pure HTML generation lives in src/recipe-render.js
 // ══════════════════════════════════════════════
+function renderLibraryHeading() {
+  if (thanksgivingMode) return;
+  const cuisine = filters.cuisine;
+  libraryTitle.textContent = cuisine ? `${cuisine} recipes` : 'Recipe library';
+  if (cuisine) libraryHeading.dataset.cuisine = cuisine.toLowerCase();
+  else delete libraryHeading.dataset.cuisine;
+}
+
 function renderStats() {
-  const s = statsFor(recipes);
+  const s = statsFor(!thanksgivingMode && filters.cuisine
+    ? recipes.filter((recipe) => recipe.cuisine === filters.cuisine)
+    : recipes);
   document.getElementById('statsBar').innerHTML =
     `<div class="stat-chip"><strong>${s.count}</strong> recipes</div>
      <div class="stat-chip"><strong>${s.cuisines}</strong> cuisines</div>
@@ -953,7 +980,9 @@ function renderGrid() {
     g.innerHTML = `<div class="empty-state"><div class="ei">☁️</div><p>${escapeHtml(bootError)}</p></div>`;
     return;
   }
-  g.innerHTML = renderGridHtml(recipes, { filters, tagRegistry });
+  g.innerHTML = thanksgivingMode
+    ? renderThanksgivingMenu(recipes, tagRegistry)
+    : renderGridHtml(recipes, { filters, tagRegistry });
   for (const image of g.querySelectorAll('.card-image img')) {
     const showPlaceholder = () => {
       image.parentElement.classList.add('card-image-empty');
@@ -1457,6 +1486,7 @@ function render() {
   document.body.classList.toggle('reader-mode', readerMode);
   document.getElementById('familyEditBtn').hidden = !readerMode;
   renderFilterChips();
+  renderLibraryHeading();
   renderStats();
   renderGrid();
   refreshInspector();
@@ -2348,7 +2378,8 @@ function closeInspector({ restoreFocus = true, fromHistory = false } = {}) {
     const cardBox = card?.getBoundingClientRect();
     const gridBox = recipeGrid.getBoundingClientRect();
     const cardInView = cardBox && cardBox.bottom > gridBox.top && cardBox.top < gridBox.bottom;
-    (cardInView ? card : document.getElementById('searchInput')).focus({ preventScroll: true });
+    const fallback = thanksgivingMode ? libraryTitle : document.getElementById('searchInput');
+    (cardInView ? card : fallback).focus({ preventScroll: true });
   }
   if (!fromHistory && inspectorHistoryEntry()) history.back();
 }

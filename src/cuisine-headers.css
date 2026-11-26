@@ -1,0 +1,97 @@
+.library-heading[data-cuisine] {
+  --cuisine-accent: #9b6e44;
+  --cuisine-detail: #7f8561;
+  --cuisine-ink: color-mix(in srgb, var(--cuisine-accent) 49%, transparent);
+  --cuisine-fine: color-mix(in srgb, var(--cuisine-detail) 34%, transparent);
+  --cuisine-pattern: repeating-linear-gradient(45deg, var(--cuisine-ink) 0 1px, transparent 1px 12px);
+  border-inline-start: 4px solid var(--cuisine-accent);
+  background-image: linear-gradient(90deg, var(--journal-paper) 42%, transparent 96%), var(--cuisine-pattern);
+  background-size: cover, var(--cuisine-size, 40px 40px);
+  background-position: center, right center;
+}
+
+/* Original geometric patterns, paired with palettes from regional ceramics, textiles, and kitchens. */
+.library-heading[data-cuisine="greek"] {
+  --cuisine-accent: #3889c4;
+  --cuisine-detail: #234e86;
+  --cuisine-size: 32px 32px;
+  --cuisine-pattern: conic-gradient(from 90deg at 35% 35%, var(--cuisine-ink) 0 25%, transparent 25% 75%, var(--cuisine-fine) 75%);
+}
+
+.library-heading[data-cuisine="mexican"] {
+  --cuisine-accent: #ba553a;
+  --cuisine-detail: #127d76;
+  --cuisine-size: 42px 42px;
+  --cuisine-pattern: repeating-conic-gradient(from 45deg, var(--cuisine-ink) 0 12.5%, transparent 12.5% 25%, var(--cuisine-fine) 25% 37.5%, transparent 37.5% 50%);
+}
+
+.library-heading[data-cuisine="spanish"] {
+  --cuisine-accent: #bd741a;
+  --cuisine-detail: #a24136;
+  --cuisine-size: 42px 26px;
+  --cuisine-pattern: radial-gradient(ellipse 54% 100% at 50% 100%, transparent 52%, var(--cuisine-fine) 54% 62%, transparent 64% 77%, var(--cuisine-ink) 79% 87%, transparent 89%);
+}
+
+.library-heading[data-cuisine="thai"] {
+  --cuisine-accent: #95622b;
+  --cuisine-detail: #8f3651;
+  --cuisine-pattern: repeating-linear-gradient(60deg, var(--cuisine-ink) 0 2px, transparent 2px 11px),
+    repeating-linear-gradient(120deg, var(--cuisine-fine) 0 2px, transparent 2px 11px);
+}
+
+.library-heading[data-cuisine="mediterranean"] {
+  --cuisine-accent: #237c78;
+  --cuisine-detail: #578750;
+  --cuisine-size: 36px 36px;
+  --cuisine-pattern: conic-gradient(from 45deg, var(--cuisine-ink) 0 25%, transparent 25% 50%, var(--cuisine-fine) 50% 75%, transparent 75%);
+}
+
+.library-heading[data-cuisine="middle eastern"] {
+  --cuisine-accent: #168778;
+  --cuisine-detail: #5884b4;
+  --cuisine-size: 48px 48px;
+  --cuisine-pattern: repeating-conic-gradient(var(--cuisine-ink) 0 14deg, transparent 14deg 31deg, var(--cuisine-fine) 31deg 45deg);
+}
+
+.library-heading[data-cuisine="italian"] {
+  --cuisine-accent: #657a3e;
+  --cuisine-detail: #ae5e49;
+  --cuisine-size: 64px 34px;
+  --cuisine-pattern: repeating-linear-gradient(90deg, var(--cuisine-ink) 0 8px, transparent 8px 18px, var(--cuisine-fine) 18px 25px, transparent 25px 32px);
+}
+
+.library-heading[data-cuisine="french"] {
+  --cuisine-accent: #537ba0;
+  --cuisine-detail: #92535b;
+  --cuisine-size: 30px 30px;
+  --cuisine-pattern: repeating-linear-gradient(90deg, var(--cuisine-ink) 0 2px, transparent 2px 8px, var(--cuisine-fine) 8px 9px, transparent 9px 15px);
+}
+
+.library-heading[data-cuisine="chinese"] {
+  --cuisine-accent: #b94246;
+  --cuisine-detail: #a6782d;
+  --cuisine-size: 40px 40px;
+  --cuisine-pattern: conic-gradient(from 45deg at 50% 50%, var(--cuisine-ink) 0 12.5%, transparent 12.5% 37.5%, var(--cuisine-fine) 37.5% 62.5%, transparent 62.5% 87.5%, var(--cuisine-ink) 87.5%);
+}
+
+.library-heading[data-cuisine="american"] {
+  --cuisine-accent: #5b739a;
+  --cuisine-detail: #a35445;
+  --cuisine-size: 36px 36px;
+  --cuisine-pattern: repeating-linear-gradient(0deg, var(--cuisine-ink) 0 9px, transparent 9px 18px),
+    repeating-linear-gradient(90deg, var(--cuisine-fine) 0 9px, transparent 9px 18px);
+}
+
+.library-heading[data-cuisine="indian"] {
+  --cuisine-accent: #b77e22;
+  --cuisine-detail: #a74d70;
+  --cuisine-size: 34px 34px;
+  --cuisine-pattern: radial-gradient(var(--cuisine-ink) 0 17%, transparent 19% 34%, var(--cuisine-fine) 36% 43%, transparent 45%);
+}
+
+.library-heading[data-cuisine="japanese"] {
+  --cuisine-accent: #527ba3;
+  --cuisine-detail: #3f5791;
+  --cuisine-size: 36px 22px;
+  --cuisine-pattern: repeating-radial-gradient(ellipse at 50% 110%, transparent 0 6px, var(--cuisine-fine) 7px 8px, transparent 9px 12px, var(--cuisine-ink) 13px 14px);
+}
