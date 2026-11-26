@@ -34,5 +34,13 @@ test('service worker keeps the seeded grid available offline after warm cache', 
   await context.setOffline(true);
   await page.reload({ waitUntil: 'domcontentloaded' });
   await expect(page.locator('.recipe-grid .card')).toHaveCount(187, { timeout: 15_000 });
+  const assets = await page.evaluate(async () => {
+    const files = ['banner-light', 'banner-dark', 'card-placeholder', 'no-search-results'];
+    return Promise.all(files.map(async (file) => {
+      const response = await fetch(`./assets/recipe-library/${file}.webp`);
+      return response.headers.get('content-type');
+    }));
+  });
+  expect(assets).toEqual(Array(4).fill('image/webp'));
   await context.setOffline(false);
 });

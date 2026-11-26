@@ -53,6 +53,8 @@ for (const viewport of [{ width: 375, height: 812 }, { width: 1440, height: 900 
     });
     expect(await fit()).toBe(true);
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+    const banner = page.locator('.library-heading');
+    await expect(banner).toHaveCSS('background-image', /banner-light\.webp/);
     const inspector = page.locator('#recipeInspector');
     await card.click();
     await expectReadableRecipeDetail(inspector);
@@ -60,7 +62,15 @@ for (const viewport of [{ width: 375, height: 812 }, { width: 1440, height: 900 
 
     await page.getByRole('button', { name: 'Dark mode' }).click();
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
-    await page.getByRole('searchbox', { name: 'Search recipes' }).fill('gougeres');
+    await expect(banner).toHaveCSS('background-image', /banner-dark\.webp/);
+    const search = page.getByRole('searchbox', { name: 'Search recipes' });
+    await search.fill('unmatched-recipe');
+    const illustration = page.locator('.empty-search-art');
+    await expect(illustration).toBeInViewport();
+    await expect.poll(() => illustration.evaluate((image) => image.naturalWidth)).toBeGreaterThan(0);
+    expect(await fit()).toBe(true);
+    await search.fill('gougeres');
+    await expect(illustration).toHaveCount(0);
     await expect(card).toBeVisible();
     await card.click();
     await expect(page.getByRole('button', { name: 'Print recipe' })).toBeVisible();

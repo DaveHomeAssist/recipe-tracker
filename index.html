@@ -144,8 +144,6 @@
   @keyframes fadeUp { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
   .card-image { aspect-ratio:4 / 3; background:linear-gradient(135deg, var(--parchment), var(--cream)); overflow:hidden; }
   .card-image img { width:100%; height:100%; display:block; object-fit:cover; }
-  .card-image-empty { display:grid; place-items:center; }
-  .card-image-empty::before { content:'🍳'; font-size:3rem; opacity:.25; }
   .card-banner { height:4px; background:var(--parchment); margin:0 -20px 14px; }
   .card-banner.cuisine-italian{background:linear-gradient(90deg,#e8a87c,#c9714a)}
   .card-banner.cuisine-french{background:linear-gradient(90deg,#7a8c6e,#5c7052)}
@@ -954,12 +952,13 @@ function renderGrid() {
     return;
   }
   g.innerHTML = renderGridHtml(recipes, { filters, tagRegistry });
-  if (readerMode) {
-    for (const image of g.querySelectorAll('.card-image img')) {
-      const hideFailedImage = () => { image.parentElement.hidden = true; };
-      if (image.complete && !image.naturalWidth) hideFailedImage();
-      else image.addEventListener('error', hideFailedImage, { once: true });
-    }
+  for (const image of g.querySelectorAll('.card-image img')) {
+    const showPlaceholder = () => {
+      image.parentElement.classList.add('card-image-empty');
+      image.remove();
+    };
+    if (image.complete && !image.naturalWidth) showPlaceholder();
+    else image.addEventListener('error', showPlaceholder, { once: true });
   }
   g.querySelectorAll('.card').forEach(el=>el.addEventListener('click',e=>{
     if(e.target.closest('.edit-btn')||e.target.closest('.del-btn')) return;
