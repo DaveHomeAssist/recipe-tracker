@@ -130,6 +130,7 @@ test('guest cards show matched source photos and use placeholders for missing or
   await page.goto('./index.html');
   const bread = page.locator('.card[data-id="bread"] img');
   await expect(bread).toHaveAttribute('src', goodImage);
+  await expect(page.locator('.card[data-id="bread"] .card-image')).toHaveCSS('background-image', /card-placeholder\.webp/);
   await expect.poll(() => bread.evaluate((image) => image.naturalWidth)).toBeGreaterThan(0);
 
   for (const id of ['soup', 'salad']) {

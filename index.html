@@ -976,9 +976,9 @@ function renderStats() {
     ? recipes.filter((recipe) => recipe.cuisine === filters.cuisine)
     : recipes);
   document.getElementById('statsBar').innerHTML =
-    `<div class="stat-chip"><strong>${s.count}</strong> recipes</div>
-     <div class="stat-chip"><strong>${s.cuisines}</strong> cuisines</div>
-     <div class="stat-chip"><strong>${s.locations}</strong> locations</div>`;
+    `<div class="stat-chip"><strong>${s.count}</strong> ${s.count === 1 ? 'recipe' : 'recipes'}</div>
+     ${filters.cuisine ? '' : `<div class="stat-chip"><strong>${s.cuisines}</strong> ${s.cuisines === 1 ? 'cuisine' : 'cuisines'}</div>`}
+     ${s.locations ? `<div class="stat-chip"><strong>${s.locations}</strong> ${s.locations === 1 ? 'location' : 'locations'}</div>` : ''}`;
 }
 
 function renderGrid() {

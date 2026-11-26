@@ -243,8 +243,8 @@ body.library-page, body.kitchen-page {
   box-shadow: 0 3px 14px #142e2021;
   border-color: var(--journal-action);
 }
-.library-page .card-image { aspect-ratio: 16 / 10; background: var(--journal-wash); }
-.library-page .card-image-empty {
+.library-page .card-image {
+  aspect-ratio: 16 / 10;
   background: var(--journal-wash) url("../assets/recipe-library/card-placeholder.webp") center / cover no-repeat;
 }
 .library-page .empty-state:has(.empty-search-art) { padding-block: 16px 24px; }
