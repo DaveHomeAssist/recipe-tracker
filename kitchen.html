@@ -162,10 +162,19 @@
 <header class="page">
   <h1>Kitchen</h1>
   <nav class="tabs" aria-label="Kitchen views">
-    <button data-tab="plan" class="active" aria-pressed="true">Plan</button>
+    <button data-tab="plan" class="active" aria-pressed="true">
+      <img class="kitchen-icon" src="./assets/kitchen/meal-plan.webp" alt="" width="24" height="24">
+      Plan
+    </button>
     <button data-tab="menus" aria-pressed="false">Menus</button>
-    <button data-tab="shop" aria-pressed="false">Shop</button>
-    <button data-tab="pantry" aria-pressed="false">Pantry</button>
+    <button data-tab="shop" aria-pressed="false">
+      <img class="kitchen-icon" src="./assets/kitchen/shopping-list.webp" alt="" width="24" height="24">
+      Shop
+    </button>
+    <button data-tab="pantry" aria-pressed="false">
+      <img class="kitchen-icon" src="./assets/kitchen/pantry.webp" alt="" width="24" height="24">
+      Pantry
+    </button>
     <button data-tab="cook" aria-pressed="false">Cook</button>
   </nav>
   <div class="sync-strip" id="sync-strip">
@@ -692,7 +701,13 @@ function renderCookUI() {
       } else {
         const chip = document.createElement('span');
         chip.className = 'timer-chip';
-        chip.textContent = '⏱ ' + t.value;
+        const icon = document.createElement('img');
+        icon.className = 'kitchen-icon';
+        icon.src = './assets/kitchen/timer.webp';
+        icon.alt = '';
+        icon.width = 24;
+        icon.height = 24;
+        chip.append(icon, t.value);
         chip.addEventListener('click', (ev) => {
           ev.stopPropagation();
           handleTimerClick(i, t);

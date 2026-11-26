@@ -305,7 +305,21 @@ body.library-page, body.kitchen-page {
   flex: 0 0 auto;
 }
 .kitchen-page nav.tabs { border-radius: 8px; padding: 3px; }
-.kitchen-page nav.tabs button { min-height: 40px; border-radius: 6px; }
+.kitchen-page nav.tabs button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 40px;
+  border-radius: 6px;
+}
+.kitchen-page .kitchen-icon { display: block; flex: none; object-fit: contain; }
+.kitchen-page .timer-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  vertical-align: middle;
+}
 .kitchen-page .panel.active {
   flex: 1;
   min-height: 0;
@@ -642,5 +656,5 @@ body.library-page, body.kitchen-page {
 .kitchen-page .menu-ingredient .muted { display: block; margin: 4px 0; }
 .kitchen-page .menu-ingredient label { margin-top: 8px; }
 @media (max-width: 540px) {
-  .kitchen-page nav.tabs button { padding-inline: 4px; }
+  .kitchen-page nav.tabs button { flex-direction: column; gap: 0; padding: 4px; }
 }

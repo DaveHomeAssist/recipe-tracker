@@ -6,7 +6,7 @@ const recipe = {
   name: 'Alain Ducasse’s Gougères',
   cuisine: 'French',
   ingredients: '1 cup flour\n4 eggs',
-  instructions: 'Bake until golden.',
+  instructions: 'Bake until golden. Rest for 2 minutes.',
   tags: ['baking'],
 };
 
@@ -89,11 +89,25 @@ for (const viewport of [{ width: 375, height: 812 }, { width: 1440, height: 900 
     await expect(page.getByRole('dialog', { name: recipe.name })).toBeVisible();
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
     await expect(page.locator('.cook-overlay')).toContainText('Bake until golden.');
+    const timerIcon = page.locator('.timer-chip img');
+    await expect(timerIcon).toBeVisible();
+    expect(await timerIcon.evaluate(async (image) => {
+      await image.decode();
+      return image.naturalWidth;
+    })).toBe(96);
     await page.keyboard.press('Escape');
     await expect(page.locator('.cook-overlay')).toHaveCount(0);
     expect(await fit()).toBe(true);
 
     await expect(page.locator('#sync-label')).toHaveText('On this device');
+    for (const view of ['Plan', 'Shop', 'Pantry']) {
+      const icon = page.getByRole('button', { name: view, exact: true }).locator('img');
+      await expect(icon).toBeVisible();
+      expect(await icon.evaluate(async (image) => {
+        await image.decode();
+        return image.naturalWidth;
+      })).toBe(96);
+    }
     await page.getByRole('button', { name: 'Plan', exact: true }).click();
     await page.getByRole('button', { name: 'Add breakfast recipe for Mon' }).click();
     await page.getByRole('button', { name: recipe.name }).click();
