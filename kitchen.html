@@ -239,6 +239,7 @@ import * as Plan from './src/meal-plan.js';
 import * as Shop from './src/shopping-list.js';
 import * as Pantry from './src/pantry.js';
 import * as Cook from './src/cook-mode.js';
+import { getRecipeTagText } from './src/recipe-lib.js';
 import { tokenizeWithTimers, parseDurations, startTimer, cancelTimer, activeTimerIds, timerRemaining, onTimerEvent, acquireWakeLock, releaseWakeLock } from './src/cook-timer.js';
 import { createStoresApi } from './src/stores-api.js';
 import { enqueuePut, pushQueue, pullAll, pendingCount, loadVersions } from './src/stores-remote.js';
@@ -257,10 +258,14 @@ function loadRecipes() {
   try {
     const raw = localStorage.getItem(RECIPE_KEY);
     const arr = raw ? JSON.parse(raw) : [];
-    return Array.isArray(arr) ? arr : [];
-  } catch { return []; }
+    if (Array.isArray(arr)) return { recipes: arr, tagRegistry: {} };
+    if (Array.isArray(arr?.recipes)) {
+      return { recipes: arr.recipes, tagRegistry: arr.tagRegistry || {} };
+    }
+  } catch { /* Missing or unreadable local recipe data. */ }
+  return { recipes: [], tagRegistry: {} };
 }
-let recipes = loadRecipes();
+const { recipes, tagRegistry } = loadRecipes();
 const byId = (id) => recipes.find((r) => String(r.id) === String(id));
 
 // ---- State ----
@@ -511,7 +516,7 @@ function openRecipePicker(onPick) {
   function render(q = '') {
     const qq = q.toLowerCase();
     const matches = recipes
-      .filter((r) => !q || (r.name || '').toLowerCase().includes(qq) || (r.cuisine || '').toLowerCase().includes(qq) || (r.tags || '').toLowerCase().includes(qq))
+      .filter((r) => !q || (r.name || '').toLowerCase().includes(qq) || (r.cuisine || '').toLowerCase().includes(qq) || getRecipeTagText(r.tags, tagRegistry).toLowerCase().includes(qq))
       .slice(0, 80);
     list.innerHTML = matches.map((r) => `
       <div class="recipe-row" data-id="${r.id}">
