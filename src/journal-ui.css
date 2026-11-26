@@ -337,6 +337,7 @@ body.library-page, body.kitchen-page {
     color: #000;
   }
   .library-page #viewModal .modal-header, .library-page #viewModal .modal-body { padding: 0; }
+  .library-page #viewModal .modal-body { overflow: visible; max-height: none; }
   .library-page #viewModal .close-btn, .library-page #viewModal .modal-footer { display: none; }
   .library-page #viewModal .view-title, .library-page #viewModal .view-label,
   .library-page #viewModal .view-subtitle, .library-page #viewModal .view-val,

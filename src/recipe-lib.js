@@ -106,3 +106,16 @@ export const dedupeByUrl = (recipes) => {
   }
   return [...seen.values()];
 };
+
+// Some recipe sites wrap ingredient notes in parentheses twice, e.g.
+// "((I like whole grain))". Collapse any stacked wrapping to a single pair
+// for display. Source data is left untouched.
+export const tidyIngredientLine = (line) => {
+  let out = String(line ?? '');
+  let prev;
+  do {
+    prev = out;
+    out = out.replace(/\(\s*\(([^()]*)\)\s*\)/g, '($1)');
+  } while (out !== prev);
+  return out;
+};

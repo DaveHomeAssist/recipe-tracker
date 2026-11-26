@@ -249,7 +249,7 @@ import * as Plan from './src/meal-plan.js';
 import * as Shop from './src/shopping-list.js';
 import * as Pantry from './src/pantry.js';
 import * as Cook from './src/cook-mode.js';
-import { getRecipeTagText } from './src/recipe-lib.js';
+import { getRecipeTagText, tidyIngredientLine } from './src/recipe-lib.js';
 import { searchText } from './src/recipe-render.js';
 import { getStoredSessionToken } from './src/session-storage.js';
 
@@ -393,7 +393,7 @@ function cell(cls, text) {
 document.getElementById('shop-this-week').addEventListener('click', () => {
   const week = weekDates();
   const entries = Plan.entriesInRange(plan, week[0], week[6]);
-  if (!entries.length) { flash('Plan is empty for this week — nothing to shop.'); return; }
+  if (!entries.length) { flash('Plan is empty for this week, so there is nothing to shop.'); return; }
   const sources = entries
     .map((e) => ({ recipe: byId(e.recipeId), servingsFactor: 1 }))
     .filter((s) => s.recipe);
@@ -646,7 +646,7 @@ function renderCookUI() {
   for (const ing of cookSession.ingredients) {
     const li = document.createElement('li');
     li.className = ing.checked ? 'checked' : '';
-    li.innerHTML = `<input type="checkbox" ${ing.checked ? 'checked' : ''}><span>${escapeHtml(ing.display)}</span>`;
+    li.innerHTML = `<input type="checkbox" ${ing.checked ? 'checked' : ''}><span>${escapeHtml(tidyIngredientLine(ing.display))}</span>`;
     li.addEventListener('click', () => {
       cookSession = Cook.toggleIngredient(cookSession, ing.idx);
       renderCookUI();
@@ -732,7 +732,7 @@ function renderCookLog() {
   el.innerHTML = hist.map((h) => {
     const when = new Date(h.startedAt).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' });
     const dur = h.finishedAt ? ` · ${Math.round((new Date(h.finishedAt) - new Date(h.startedAt)) / 60000)}m` : '';
-    return `<div>• ${escapeHtml(when)} — <strong>${escapeHtml(h.recipeName)}</strong> (${h.stepsCompleted}/${h.totalSteps} steps${dur})</div>`;
+    return `<div>• ${escapeHtml(when)}: <strong>${escapeHtml(h.recipeName)}</strong> (${h.stepsCompleted}/${h.totalSteps} steps${dur})</div>`;
   }).join('');
 }
 

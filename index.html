@@ -5,19 +5,19 @@
 <meta name="robots" content="noindex, nofollow">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Our Recipe Journal</title>
-<meta name="description" content="A shared family recipe journal — tastes from restaurants, travels, and kitchens we love. Search, filter, and save the recipes we cook at home.">
+<meta name="description" content="A shared family recipe journal of tastes from restaurants, travels, and kitchens we love. Search, filter, and save the recipes we cook at home.">
 <meta name="theme-color" content="#b5541c">
 <link rel="canonical" href="https://davehomeassist.github.io/recipe-tracker/">
 <link rel="icon" type="image/svg+xml" href="./favicon.svg">
 <link rel="manifest" href="./manifest.webmanifest">
 <meta property="og:type" content="website">
 <meta property="og:title" content="Our Recipe Journal">
-<meta property="og:description" content="A shared family recipe journal — tastes from restaurants, travels, and kitchens we love.">
+<meta property="og:description" content="A shared family recipe journal of tastes from restaurants, travels, and kitchens we love.">
 <meta property="og:url" content="https://davehomeassist.github.io/recipe-tracker/">
 <meta property="og:site_name" content="Our Recipe Journal">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="Our Recipe Journal">
-<meta name="twitter:description" content="A shared family recipe journal — tastes from restaurants, travels, and kitchens we love.">
+<meta name="twitter:description" content="A shared family recipe journal of tastes from restaurants, travels, and kitchens we love.">
 <script type="application/ld+json">
 {"@context":"https://schema.org","@type":"WebApplication","name":"Our Recipe Journal","description":"A shared family recipe journal.","url":"https://davehomeassist.github.io/recipe-tracker/","applicationCategory":"LifestyleApplication","operatingSystem":"Any","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"}}
 </script>
@@ -185,13 +185,14 @@
   /* MODAL BASE */
   .modal-overlay { position:fixed; inset:0; background:rgba(43,33,24,0.55); backdrop-filter:blur(3px); display:flex; align-items:center; justify-content:center; z-index:100; padding:16px; opacity:0; pointer-events:none; transition:opacity .22s; }
   .modal-overlay.open { opacity:1; pointer-events:all; }
-  .modal { background:var(--warm-white); border-radius:14px; width:100%; max-width:600px; max-height:92vh; overflow-y:auto; box-shadow:0 20px 60px var(--shadow-deep); transform:translateY(20px); transition:transform .22s; border:1px solid rgba(201,168,76,0.2); }
+  .modal { background:var(--warm-white); border-radius:14px; width:100%; max-width:600px; max-height:92vh; max-height:92dvh; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 20px 60px var(--shadow-deep); transform:translateY(20px); transition:transform .22s; border:1px solid rgba(201,168,76,0.2); }
   .modal-overlay.open .modal { transform:translateY(0); }
   .modal-header { padding:24px 26px 18px; border-bottom:1px solid var(--parchment); display:flex; justify-content:space-between; align-items:flex-start; }
   .modal-header h2 { font-family:'Playfair Display',serif; font-size:1.5rem; color:var(--espresso); }
   .close-btn { background:none; border:none; font-size:1.4rem; cursor:pointer; opacity:.4; line-height:1; transition:opacity .15s; }
   .close-btn:hover { opacity:1; }
-  .modal-body { padding:22px 26px 10px; }
+  .modal-header, .modal-footer { flex:none; }
+  .modal-body { padding:22px 26px 10px; flex:1 1 auto; min-height:0; overflow-y:auto; overscroll-behavior:contain; }
   .modal-footer { padding:12px 26px 26px; display:flex; gap:10px; justify-content:flex-end; flex-wrap:wrap; }
 
   /* FORM */
@@ -556,6 +557,7 @@ import {
   safeUrl,
   slugifyTag,
   splitTagLabels,
+  tidyIngredientLine,
 } from './src/recipe-lib.js';
 import { filtered as filteredRecipes, renderGridHtml, statsFor, stars } from './src/recipe-render.js';
 import { validateImport } from './src/recipe-schema.js';
@@ -895,7 +897,7 @@ function persist(options = {}) {
   } catch (e) {
     // QuotaExceededError, private-mode Safari, etc. Surface it so users notice.
     console.error('persist failed:', e);
-    showToast('⚠️ Could not save — storage is full or disabled. Export your recipes to keep them safe.', 'error');
+    showToast('⚠️ Could not save. Storage is full or disabled. Export your recipes to keep them safe.', 'error');
   }
 }
 
@@ -1802,7 +1804,7 @@ async function syncLibraryToNotion() {
       return;
     }
     if (error?.code === 'NETWORK_ERROR') {
-      showToast('Offline — changes saved locally', 'warn');
+      showToast('Offline. Changes saved locally.', 'warn');
       return;
     }
     showToast(`⚠️ Sync failed: ${error.message || 'server error'}`, 'error');
@@ -2022,7 +2024,7 @@ document.getElementById('saveFormBtn').addEventListener('click', async ()=>{
       }
       persist();
       if (result.offline) {
-        showToast('Offline — changes saved locally', 'warn');
+        showToast('Offline. Changes saved locally.', 'warn');
       }
     } catch (error) {
       console.error('remote save failed:', error);
@@ -2256,7 +2258,7 @@ function openView(id) {
   prefs = recordView(id, prefs);
   document.getElementById('v-name').textContent=r.name;
   document.getElementById('v-sub').innerHTML=`${escapeHtml(r.cuisine||'')}${r.source?' · '+escapeHtml(r.source):''}${r.location?' · '+escapeHtml(r.location):''}&nbsp;&nbsp;${stars(r.rating||0)}`;
-  const ingHtml=(r.ingredients||'').split(/\n/).filter(Boolean).map(i=>`<li>${escapeHtml(i.trim())}</li>`).join('');
+  const ingHtml=(r.ingredients||'').split(/\n/).filter(Boolean).map(i=>`<li>${escapeHtml(tidyIngredientLine(i.trim()))}</li>`).join('');
   const linkUrl=safeUrl(r.url);
   document.getElementById('viewBody').innerHTML=`
     ${(r.date||r.preptime||r.cooktime||r.servings)?`
@@ -2291,7 +2293,7 @@ function del(id) {
         recipes.splice(idx, 1);
         prefs = recordEdit(prefs);
         persist(); render();
-        showToast(result?.offline ? 'Offline — changes saved locally' : `"${removed.name}" deleted`);
+        showToast(result?.offline ? 'Offline. Changes saved locally.' : `"${removed.name}" deleted`);
       })
       .catch((error) => {
         console.error('remote delete failed:', error);
@@ -2335,6 +2337,8 @@ function openModal(id) {
   lastFocusedBeforeModal = document.activeElement;
   const el = document.getElementById(id);
   el.classList.add('open');
+  // Start every modal at the top of its scrolling body.
+  el.querySelectorAll('.modal-body').forEach((body) => { body.scrollTop = 0; });
   // Move focus to the first focusable element inside the modal.
   const firstFocusable = el.querySelector('input,select,textarea,button,[tabindex]:not([tabindex="-1"])');
   if (firstFocusable) setTimeout(() => firstFocusable.focus(), 50);

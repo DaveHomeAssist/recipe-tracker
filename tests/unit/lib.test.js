@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { escapeHtml, safeUrl, dedupeByUrl, normalizeTags } from '../../src/recipe-lib.js';
+import { escapeHtml, safeUrl, dedupeByUrl, normalizeTags, tidyIngredientLine } from '../../src/recipe-lib.js';
 
 describe('escapeHtml', () => {
   it('escapes all five reserved HTML characters', () => {
@@ -190,5 +190,21 @@ describe('normalizeTags', () => {
   it('handles mixed mess from a real import', () => {
     expect(normalizeTags('PASTA, pasta, Date Night,date night,quick'))
       .toBe('Pasta, Date Night, Quick');
+  });
+});
+
+describe('tidyIngredientLine', () => {
+  it('collapses doubled parentheses around a note', () => {
+    expect(tidyIngredientLine('2 slices bread ((I like whole grain or seeded))'))
+      .toBe('2 slices bread (I like whole grain or seeded)');
+  });
+  it('collapses tripled and spaced parentheses', () => {
+    expect(tidyIngredientLine('salt ( ((to taste)) )')).toBe('salt (to taste)');
+  });
+  it('leaves single and separate parentheses alone', () => {
+    expect(tidyIngredientLine('1 cup (240ml) milk (warm)')).toBe('1 cup (240ml) milk (warm)');
+  });
+  it('handles empty input', () => {
+    expect(tidyIngredientLine(undefined)).toBe('');
   });
 });
