@@ -163,6 +163,7 @@
   <h1>Kitchen</h1>
   <nav class="tabs" aria-label="Kitchen views">
     <button data-tab="plan" class="active" aria-pressed="true">Plan</button>
+    <button data-tab="menus" aria-pressed="false">Menus</button>
     <button data-tab="shop" aria-pressed="false">Shop</button>
     <button data-tab="pantry" aria-pressed="false">Pantry</button>
     <button data-tab="cook" aria-pressed="false">Cook</button>
@@ -196,6 +197,22 @@
     </div>
     <p class="muted" style="margin-top:10px;font-size:12px">Select a meal slot to add a recipe.</p>
   </div>
+</section>
+
+<section id="panel-menus" class="panel">
+  <div class="card">
+    <h2>Big Game Souper Party</h2>
+    <p>Family menu adapted from Act Two Catering.</p>
+    <ul>
+      <li>Gougères and charcuterie with artisan bread</li>
+      <li>Potato cheddar soup, spicy chili, creamy chicken noodle soup and vegetarian pasta fagioli</li>
+      <li>Devil’s food cake with vanilla buttercream</li>
+    </ul>
+    <p>The family pilot uses the Journal’s Gruyère gougères. The other dishes are menu ideas for later.</p>
+    <button class="btn" type="button" id="review-menu-groceries">Review gougères groceries</button>
+    <p id="menu-message" role="status"></p>
+  </div>
+  <div class="card" id="menu-grocery-review" hidden></div>
 </section>
 
 <section id="panel-shop" class="panel">
@@ -252,6 +269,7 @@ import * as Plan from './src/meal-plan.js';
 import * as Shop from './src/shopping-list.js';
 import * as Pantry from './src/pantry.js';
 import * as Cook from './src/cook-mode.js';
+import { initMenuPreview } from './src/kitchen-menu-preview.js';
 import { getRecipeTagText, tidyIngredientLine } from './src/recipe-lib.js';
 import { searchText } from './src/recipe-render.js';
 import { getStoredSessionToken } from './src/session-storage.js';
@@ -879,12 +897,15 @@ function savePantry(payload) {
 document.getElementById('sync-btn').addEventListener('click', () => syncNow());
 
 // ---- Boot ----
+initMenuPreview({ recipes, openRecipePicker });
 renderPlan();
 renderCookLog();
 refreshSyncBadge();
 // Attempt an initial pull (silent if no session).
 syncNow({ silent: true }).catch(() => {});
-const requestedRecipeId = new URLSearchParams(window.location.hash.slice(1)).get('cook');
+const kitchenRoute = new URLSearchParams(window.location.hash.slice(1));
+if (kitchenRoute.get('menu') === 'big-game') document.querySelector('[data-tab="menus"]').click();
+const requestedRecipeId = kitchenRoute.get('cook');
 if (requestedRecipeId) {
   document.querySelector('[data-tab="cook"]').click();
   const recipe = byId(requestedRecipeId);
