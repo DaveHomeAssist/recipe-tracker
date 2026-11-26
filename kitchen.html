@@ -141,25 +141,32 @@
   .flash { background: #f0f6ec; border-left: 3px solid var(--success); padding: 8px 12px; margin: 10px 0; border-radius: 4px; font-size: 13px; animation: fadein 0.2s; }
   @keyframes fadein { from { opacity: 0; transform: translateY(-4px); } }
 </style>
+<link rel="stylesheet" href="./src/journal-ui.css">
+<script defer src="./src/journal-theme.js"></script>
 </head>
-<body>
-<div class="layout">
+<body class="kitchen-page">
+<div class="app-masthead">
+  <a class="app-brand" href="./index.html" aria-label="Recipe Journal home">Recipe Journal</a>
+  <nav class="app-nav" aria-label="Recipe Journal">
+    <a href="./index.html">Library</a>
+    <a href="./kitchen.html" aria-current="page">Kitchen</a>
+  </nav>
+  <button class="theme-toggle" data-theme-toggle type="button">Dark mode</button>
+</div>
+<main class="layout" id="main">
 
 <header class="page">
-  <div>
-    <h1>🍳 Kitchen</h1>
-    <a class="back" href="./index.html">← back to recipes</a>
-  </div>
-  <nav class="tabs">
-    <button data-tab="plan" class="active">Plan</button>
-    <button data-tab="shop">Shop</button>
-    <button data-tab="pantry">Pantry</button>
-    <button data-tab="cook">Cook</button>
+  <h1>Kitchen</h1>
+  <nav class="tabs" aria-label="Kitchen views">
+    <button data-tab="plan" class="active" aria-pressed="true">Plan</button>
+    <button data-tab="shop" aria-pressed="false">Shop</button>
+    <button data-tab="pantry" aria-pressed="false">Pantry</button>
+    <button data-tab="cook" aria-pressed="false">Cook</button>
   </nav>
   <div class="sync-strip" id="sync-strip">
     <span class="sync-dot" id="sync-dot"></span>
-    <span class="sync-label" id="sync-label">offline</span>
-    <button class="btn small ghost" id="sync-btn" title="Sync now">↻</button>
+    <span class="sync-label" id="sync-label" role="status">offline</span>
+    <button class="btn small ghost" id="sync-btn" title="Sync now" aria-label="Sync now">↻</button>
   </div>
 </header>
 
@@ -180,8 +187,10 @@
       <button class="btn" id="shop-this-week">Shop for this week →</button>
       <button class="btn ghost" id="clear-plan">Clear all</button>
     </div>
-    <div class="plan-grid" id="plan-grid"></div>
-    <p class="muted" style="margin-top:10px;font-size:12px">Tap a slot to add a recipe.</p>
+    <div class="plan-scroll" role="region" aria-label="Weekly meal plan" tabindex="0">
+      <div class="plan-grid" id="plan-grid"></div>
+    </div>
+    <p class="muted" style="margin-top:10px;font-size:12px">Select a meal slot to add a recipe.</p>
   </div>
 </section>
 
@@ -201,7 +210,7 @@
   <div class="card">
     <h2>Pantry</h2>
     <div class="pantry-add">
-      <input type="text" id="pantry-input" placeholder="Add an ingredient… (e.g. flour, onion, chicken)" list="pantry-suggest">
+      <input type="text" id="pantry-input" aria-label="Pantry ingredient" placeholder="Add an ingredient… (e.g. flour, onion, chicken)" list="pantry-suggest">
       <datalist id="pantry-suggest"></datalist>
       <button class="btn" id="pantry-add-btn">Add</button>
     </div>
@@ -217,7 +226,7 @@
 <section id="panel-cook" class="panel">
   <div class="card">
     <h2>Cook Mode</h2>
-    <p class="muted">Pick a recipe and cook with a full-screen step overlay. Tap any <span class="timer-chip" style="cursor:default">duration</span> inside a step to start a timer.</p>
+    <p class="muted">Open a recipe for a step-by-step view. Select a duration in any step to start a timer.</p>
     <button class="btn" id="pick-cook">Pick a recipe to cook →</button>
   </div>
   <div class="card">
@@ -229,7 +238,7 @@
 <div id="modal-root"></div>
 <div class="timer-bar" id="timer-bar"><span id="timer-bar-label">Timer</span><span id="timer-bar-rem">00:00</span></div>
 
-</div>
+</main>
 
 <script type="module">
 // Data layer imports
@@ -240,6 +249,8 @@ import * as Shop from './src/shopping-list.js';
 import * as Pantry from './src/pantry.js';
 import * as Cook from './src/cook-mode.js';
 import { getRecipeTagText } from './src/recipe-lib.js';
+import { searchText } from './src/recipe-render.js';
+import { getStoredSessionToken } from './src/session-storage.js';
 import { tokenizeWithTimers, parseDurations, startTimer, cancelTimer, activeTimerIds, timerRemaining, onTimerEvent, acquireWakeLock, releaseWakeLock } from './src/cook-timer.js';
 import { createStoresApi } from './src/stores-api.js';
 import { enqueuePut, pushQueue, pullAll, pendingCount, loadVersions } from './src/stores-remote.js';
@@ -276,9 +287,12 @@ let pantry = Pantry.loadPantry();
 // ---- Tabs ----
 document.querySelectorAll('nav.tabs button').forEach((btn) => {
   btn.addEventListener('click', () => {
-    document.querySelectorAll('nav.tabs button').forEach((b) => b.classList.remove('active'));
+    document.querySelectorAll('nav.tabs button').forEach((button) => {
+      const selected = button === btn;
+      button.classList.toggle('active', selected);
+      button.setAttribute('aria-pressed', String(selected));
+    });
     document.querySelectorAll('.panel').forEach((p) => p.classList.remove('active'));
-    btn.classList.add('active');
     document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
     if (btn.dataset.tab === 'shop') renderShop();
     if (btn.dataset.tab === 'pantry') renderPantry();
@@ -322,7 +336,12 @@ function renderPlan() {
       const date = week[i];
       const slotEl = document.createElement('div');
       slotEl.className = 'plan-slot';
-      slotEl.innerHTML = `<div class="plan-slot-label">${label[0]}</div>`;
+      const addRecipe = document.createElement('button');
+      addRecipe.className = 'plan-add';
+      addRecipe.type = 'button';
+      addRecipe.textContent = 'Add';
+      addRecipe.setAttribute('aria-label', 'Add ' + label.toLowerCase() + ' recipe for ' + DAY_LABELS[i]);
+      slotEl.appendChild(addRecipe);
       const entries = Plan.entriesFor(plan, date, slot);
       for (const e of entries) {
         const r = byId(e.recipeId);
@@ -333,15 +352,15 @@ function renderPlan() {
         chip.querySelector('.rm').addEventListener('click', (ev) => {
           ev.stopPropagation();
           plan = Plan.removeEntry(plan, e.id);
-          Plan.savePlan(plan);
+          saveMealPlan(plan);
           renderPlan();
         });
         slotEl.appendChild(chip);
       }
-      slotEl.addEventListener('click', () => {
+      addRecipe.addEventListener('click', () => {
         openRecipePicker((recipe) => {
           plan = Plan.addEntry(plan, { date, slot, recipeId: String(recipe.id) });
-          Plan.savePlan(plan);
+          saveMealPlan(plan);
           renderPlan();
         });
       });
@@ -365,14 +384,14 @@ document.getElementById('shop-this-week').addEventListener('click', () => {
     .filter((s) => s.recipe);
   const fresh = Shop.generateFromRecipes(sources, AISLE);
   const merged = Shop.mergeWithExisting(fresh, shopList);
-  shopList = Shop.saveList(merged);
+  shopList = saveShoppingList(merged);
   document.querySelector('nav.tabs button[data-tab="shop"]').click();
 });
 
 document.getElementById('clear-plan').addEventListener('click', () => {
   if (!confirm('Clear entire meal plan?')) return;
   plan = { version: 1, entries: [] };
-  Plan.savePlan(plan);
+  saveMealPlan(plan);
   renderPlan();
 });
 
@@ -402,12 +421,12 @@ function renderShop() {
       `;
       row.querySelector('input').addEventListener('change', () => {
         shopList = Shop.toggleItem(shopList, item.slug);
-        Shop.saveList(shopList);
+        saveShoppingList(shopList);
         renderShop();
       });
       row.querySelector('.shop-drop').addEventListener('click', () => {
         shopList = Shop.removeItem(shopList, item.slug);
-        Shop.saveList(shopList);
+        saveShoppingList(shopList);
         renderShop();
       });
       section.appendChild(row);
@@ -421,7 +440,7 @@ document.getElementById('gen-from-plan').addEventListener('click', () => {
   const sources = entries.map((e) => ({ recipe: byId(e.recipeId), servingsFactor: 1 })).filter((s) => s.recipe);
   const fresh = Shop.generateFromRecipes(sources, AISLE);
   const merged = Shop.mergeWithExisting(fresh, shopList);
-  shopList = Shop.saveList(merged);
+  shopList = saveShoppingList(merged);
   renderShop();
   flash('Regenerated from this week\'s plan.');
 });
@@ -429,13 +448,13 @@ document.getElementById('pantry-from-checked').addEventListener('click', () => {
   const checked = (shopList.items || []).filter((i) => i.checked).map((i) => i.slug).filter((s) => !s.startsWith('raw:'));
   if (!checked.length) { flash('No checked items to add.'); return; }
   pantry = Pantry.addMany(pantry, checked);
-  Pantry.savePantry(pantry);
+  savePantry(pantry);
   flash(`Added ${checked.length} item${checked.length === 1 ? '' : 's'} to pantry.`);
 });
 document.getElementById('clear-shop').addEventListener('click', () => {
   if (!confirm('Remove all unchecked items?')) return;
   shopList = { ...shopList, items: shopList.items.filter((i) => i.checked) };
-  Shop.saveList(shopList);
+  saveShoppingList(shopList);
   renderShop();
 });
 
@@ -452,7 +471,7 @@ function renderPantry() {
       pill.innerHTML = `<span>${escapeHtml(it.displayName)}</span><span class="x" title="remove">✕</span>`;
       pill.querySelector('.x').addEventListener('click', () => {
         pantry = Pantry.removeItem(pantry, it.slug);
-        Pantry.savePantry(pantry);
+        savePantry(pantry);
         renderPantry();
       });
       list.appendChild(pill);
@@ -490,7 +509,7 @@ function addPantryItem() {
   const val = input.value.trim().toLowerCase();
   if (!val) return;
   pantry = Pantry.addItem(pantry, { slug: val });
-  Pantry.savePantry(pantry);
+  savePantry(pantry);
   input.value = '';
   renderPantry();
 }
@@ -503,10 +522,14 @@ function openRecipePicker(onPick) {
   backdrop.className = 'modal-backdrop';
   const modal = document.createElement('div');
   modal.className = 'modal';
+  modal.setAttribute('role', 'dialog');
+  modal.setAttribute('aria-modal', 'true');
+  modal.setAttribute('aria-labelledby', 'picker-title');
+  const returnFocus = document.activeElement;
   modal.innerHTML = `
-    <button class="modal-close">×</button>
-    <h3>Pick a recipe</h3>
-    <input class="recipe-search" placeholder="Search ${recipes.length} recipes…" autofocus>
+    <button class="modal-close" type="button" aria-label="Close recipe picker">×</button>
+    <h3 id="picker-title">Pick a recipe</h3>
+    <input class="recipe-search" type="search" aria-label="Search recipes" placeholder="Search ${recipes.length} recipes…">
     <div class="recipe-list"></div>
   `;
   backdrop.appendChild(modal);
@@ -514,30 +537,39 @@ function openRecipePicker(onPick) {
   const list = modal.querySelector('.recipe-list');
   const input = modal.querySelector('.recipe-search');
   function render(q = '') {
-    const qq = q.toLowerCase();
+    const qq = searchText(q);
     const matches = recipes
-      .filter((r) => !q || (r.name || '').toLowerCase().includes(qq) || (r.cuisine || '').toLowerCase().includes(qq) || getRecipeTagText(r.tags, tagRegistry).toLowerCase().includes(qq))
+      .filter((r) => !q || searchText(r.name).includes(qq) || searchText(r.cuisine).includes(qq) || searchText(getRecipeTagText(r.tags, tagRegistry)).includes(qq))
       .slice(0, 80);
     list.innerHTML = matches.map((r) => `
-      <div class="recipe-row" data-id="${r.id}">
+      <button class="recipe-row" type="button" data-id="${escapeAttr(String(r.id))}">
         <img src="${escapeAttr(r.image || 'favicon.svg')}" onerror="this.src='favicon.svg'" alt="">
         <span class="name">${escapeHtml(r.name || '(untitled)')}</span>
         ${r.cuisine ? `<span class="cuisine">${escapeHtml(r.cuisine)}</span>` : ''}
-      </div>
-    `).join('');
+      </button>
+    `).join('') || '<p class="empty">No matching recipes.</p>';
     list.querySelectorAll('.recipe-row').forEach((row) => {
       row.addEventListener('click', () => {
         const r = byId(row.dataset.id);
-        if (r) onPick(r);
         closeModal();
+        if (r) onPick(r);
       });
     });
   }
   input.addEventListener('input', () => render(input.value));
   render('');
+  input.focus();
   modal.querySelector('.modal-close').addEventListener('click', closeModal);
-  backdrop.addEventListener('click', (e) => { if (e.target === backdrop) closeModal(); });
-  function closeModal() { root.innerHTML = ''; }
+  backdrop.addEventListener('click', (event) => {
+    if (event.target === backdrop) closeModal();
+  });
+  modal.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') closeModal();
+  });
+  function closeModal() {
+    root.innerHTML = '';
+    if (returnFocus?.isConnected) returnFocus.focus();
+  }
 }
 
 // ---- COOK mode overlay ----
@@ -551,9 +583,12 @@ async function openCookMode(recipe) {
   document.getElementById('modal-root').innerHTML = '';
   const wrap = document.createElement('div');
   wrap.className = 'cook-overlay';
+  wrap.setAttribute('role', 'dialog');
+  wrap.setAttribute('aria-modal', 'true');
+  wrap.setAttribute('aria-labelledby', 'cook-title');
   wrap.innerHTML = `
     <div class="cook-head">
-      <h2>${escapeHtml(recipe.name || 'Cook')}</h2>
+      <h2 id="cook-title">${escapeHtml(recipe.name || 'Cook')}</h2>
       <div>
         <button class="btn ghost" id="cook-close">Close</button>
       </div>
@@ -568,7 +603,12 @@ async function openCookMode(recipe) {
   `;
   document.body.appendChild(wrap);
   document.body.style.overflow = 'hidden';
-  document.getElementById('cook-close').addEventListener('click', closeCookMode);
+  const closeButton = document.getElementById('cook-close');
+  closeButton.addEventListener('click', closeCookMode);
+  wrap.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') closeCookMode();
+  });
+  closeButton.focus();
   await acquireWakeLock();
   renderCookUI();
 }
@@ -582,6 +622,7 @@ function closeCookMode() {
   document.querySelector('.cook-overlay')?.remove();
   document.body.style.overflow = '';
   renderCookLog();
+  document.getElementById('pick-cook').focus();
 }
 function renderCookUI() {
   if (!cookSession) return;
@@ -694,17 +735,13 @@ function flash(msg, ms = 2200) {
   setTimeout(() => d.remove(), ms);
 }
 
-// ---- Sync layer (Phase 4) ----
-// The main app owns the family-code / session-token contract via
-// recipe_journal_session_token_v1 in localStorage. We read it so this
-// page can piggyback the same session.
-const SESSION_TOKEN_KEY = 'recipe_journal_session_token_v1';
+// Kitchen uses the same household session and API deployment as the Journal.
+const storeApiBase = location.hostname === 'davehomeassist.github.io'
+  ? 'https://recipe-tracker-beta.vercel.app/api'
+  : '/api';
 const storesApi = createStoresApi({
-  baseUrl: '/api',
-  getSessionToken: () => {
-    try { return localStorage.getItem(SESSION_TOKEN_KEY) || ''; } catch { return ''; }
-  },
-  onUnauthorized: () => setSyncState('unauth', 'sign in via main app to sync'),
+  baseUrl: storeApiBase,
+  getSessionToken: getStoredSessionToken,
 });
 let syncBusy = false;
 
@@ -763,15 +800,25 @@ async function resolveConflict(store, local, server) {
 
 async function syncNow({ silent = false } = {}) {
   if (syncBusy) return;
+  if (!getStoredSessionToken()) {
+    setSyncState('offline', 'On this device');
+    if (!silent) flash('Open the Library and sign in to sync across devices.');
+    return;
+  }
   syncBusy = true;
   setSyncState('pending', 'syncing…');
   try {
     // 1. Pull latest from server into local state.
-    await pullAll(storesApi, applyStoreFromServer);
+    const pull = await pullAll(storesApi, applyStoreFromServer);
+    if (pull.errors.length) {
+      const expired = pull.errors.some((error) => error.status === 401);
+      setSyncState('error', expired ? 'Sign in to sync' : 'Sync unavailable');
+      return;
+    }
     // 2. Push local pending writes.
     const r = await pushQueue(storesApi, { resolveConflict });
     if (r.errors.length) {
-      setSyncState('error', 'sync failed');
+      setSyncState('error', 'Sync unavailable');
     } else if (pendingCount() > 0) {
       setSyncState('pending', `${pendingCount()} pending`);
     } else {
@@ -793,15 +840,23 @@ function enqueueAfterChange(store, payload) {
   if (!syncBusy) setTimeout(() => syncNow({ silent: true }).catch(() => {}), 400);
 }
 
-// Monkeypatch the three store module save-points so any local change
-// triggers a queued sync. Avoids touching the modules themselves so
-// Phase 0-3 stays pure.
-const origSavePlan = Plan.savePlan;
-Plan.savePlan = (p) => { const r = origSavePlan(p); enqueueAfterChange('meal_plan', r); return r; };
-const origSaveList = Shop.saveList;
-Shop.saveList = (s) => { const r = origSaveList(s); enqueueAfterChange('shopping_list', r); return r; };
-const origSavePantry = Pantry.savePantry;
-Pantry.savePantry = (p) => { const r = origSavePantry(p); enqueueAfterChange('pantry', r); return r; };
+function saveMealPlan(payload) {
+  const stored = Plan.savePlan(payload);
+  enqueueAfterChange('meal_plan', stored);
+  return stored;
+}
+
+function saveShoppingList(payload) {
+  const stored = Shop.saveList(payload);
+  enqueueAfterChange('shopping_list', stored);
+  return stored;
+}
+
+function savePantry(payload) {
+  const stored = Pantry.savePantry(payload);
+  enqueueAfterChange('pantry', stored);
+  return stored;
+}
 
 document.getElementById('sync-btn').addEventListener('click', () => syncNow());
 
@@ -811,6 +866,14 @@ renderCookLog();
 refreshSyncBadge();
 // Attempt an initial pull (silent if no session).
 syncNow({ silent: true }).catch(() => {});
+const requestedRecipeId = new URLSearchParams(window.location.hash.slice(1)).get('cook');
+if (requestedRecipeId) {
+  document.querySelector('[data-tab="cook"]').click();
+  const recipe = byId(requestedRecipeId);
+  if (recipe) void openCookMode(recipe);
+  else openRecipePicker(openCookMode);
+}
+
 if (!recipes.length) {
   flash('No recipes found in local storage. Open the main Recipe Journal first so this page sees your library.');
 }

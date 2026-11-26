@@ -198,7 +198,7 @@ test('add form pre-fills cuisine, suggestions, and rating defaults from usage', 
 test('closing the view modal restores the prior scroll position', async ({ page }) => {
   await freshPage(page);
   await page.locator('.recipe-grid .card').nth(30).scrollIntoViewIfNeeded();
-  const beforeOpen = await page.evaluate(() => window.scrollY);
+  const beforeOpen = await page.locator('#recipeGrid').evaluate((grid) => grid.scrollTop);
 
   await page.locator('.recipe-grid .card').nth(30).click();
   await expect(page.locator('#viewModal')).toHaveClass(/open/);
@@ -206,7 +206,7 @@ test('closing the view modal restores the prior scroll position', async ({ page 
   await expect(page.locator('#viewModal')).not.toHaveClass(/open/);
   await page.waitForTimeout(120);
 
-  const afterClose = await page.evaluate(() => window.scrollY);
+  const afterClose = await page.locator('#recipeGrid').evaluate((grid) => grid.scrollTop);
   expect(Math.abs(afterClose - beforeOpen)).toBeLessThan(5);
 });
 

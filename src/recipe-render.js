@@ -27,9 +27,11 @@ const normalizeFilters = ({ filter = 'all', filters = null, search = '' } = {}) 
   };
 };
 
+export const searchText = (value) => String(value ?? '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+
 export const filtered = (recipes, options = {}) => {
   const activeFilters = normalizeFilters(options);
-  const q = activeFilters.search.toLowerCase();
+  const q = searchText(activeFilters.search);
   const tagRegistry = options.tagRegistry || {};
   const hasTagFilters = activeFilters.tags.length > 0;
   const hasRatingFilter = activeFilters.rating > 0;
@@ -45,12 +47,12 @@ export const filtered = (recipes, options = {}) => {
     if (hasRatingFilter && Number(r.rating || 0) < activeFilters.rating) return false;
     if (!hasQuery) return true;
 
-    if ((r.name || '').toLowerCase().includes(q)) return true;
-    if ((r.location || '').toLowerCase().includes(q)) return true;
-    if ((r.source || '').toLowerCase().includes(q)) return true;
-    if ((r.notes || '').toLowerCase().includes(q)) return true;
-    if ((r.ingredients || '').toLowerCase().includes(q)) return true;
-    return getRecipeTagText(r.tags, tagRegistry).toLowerCase().includes(q);
+    if (searchText(r.name).includes(q)) return true;
+    if (searchText(r.location).includes(q)) return true;
+    if (searchText(r.source).includes(q)) return true;
+    if (searchText(r.notes).includes(q)) return true;
+    if (searchText(r.ingredients).includes(q)) return true;
+    return searchText(getRecipeTagText(r.tags, tagRegistry)).includes(q);
   });
 };
 
@@ -95,7 +97,7 @@ export const renderCardHtml = (r, indexOrOptions = 0, maybeOptions = {}) => {
 export const renderGridHtml = (recipes, opts = {}) => {
   const list = filtered(recipes, opts);
   if (!list.length) {
-    return `<div class="empty-state"><div class="ei">🍽️</div><p>No recipes yet — paste a link above or add one manually.</p></div>`;
+    return `<div class="empty-state"><div class="ei">🍽️</div><p>No recipes match. Try changing your search or filters.</p></div>`;
   }
   return list.map((r, i) => renderCardHtml(r, { index: i, tagRegistry: opts.tagRegistry || {} })).join('');
 };
