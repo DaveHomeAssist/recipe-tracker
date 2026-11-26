@@ -362,3 +362,17 @@ body.library-page, body.kitchen-page {
   cursor: pointer;
 }
 .kitchen-page .plan-add:hover { background: var(--journal-wash); }
+
+.reader-mode .app-nav a[href="./kitchen.html"],
+.reader-mode #openAddBtn,
+.reader-mode #openTagManagerBtn,
+.reader-mode #exportBtn,
+.reader-mode #importBtn,
+.reader-mode #syncToNotionBtn,
+.reader-mode #editViewBtn,
+.reader-mode #deleteViewBtn,
+.reader-mode .card-actions,
+.reader-mode .filter-row:has(#tagFilterBtns) {
+  display: none;
+}
+.reader-mode .card-footer:has(.card-tags:empty) { display: none; }

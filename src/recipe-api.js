@@ -58,6 +58,10 @@ export const createRecipeApi = ({ baseUrl = '/api', getSessionToken = () => '', 
     },
     getSession: () => request('/v1/session', { method: 'GET' }),
     deleteSession: () => request('/v1/session', { method: 'DELETE' }),
+    getPublicRecipes: async () => {
+      const payload = await request('/v1/public-recipes', { sessionToken: '' });
+      return Array.isArray(payload?.data) ? payload.data : [];
+    },
     getRecipes: async () => {
       const payload = await request('/v1/recipes');
       return payload.data || [];

@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="robots" content="noindex, nofollow">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Our Recipe Journal</title>
 <meta name="description" content="A shared family recipe journal — tastes from restaurants, travels, and kitchens we love. Search, filter, and save the recipes we cook at home.">
@@ -419,6 +420,7 @@
     <div class="active-filters" id="activeFilters" aria-live="polite"></div>
   </div>
   <div class="toolbar-actions">
+    <button class="btn-toolbar" id="familyEditBtn" type="button" hidden>Sign in to edit</button>
     <button class="add-btn add-btn-primary" id="openAddBtn" type="button">Add Recipe</button>
     <button class="btn-toolbar" id="openTagManagerBtn" type="button" aria-label="Manage tags">Manage Tags</button>
     <button class="btn-toolbar" id="exportBtn" type="button" aria-label="Export all recipes as a JSON file">⇩ Export</button>
@@ -589,6 +591,7 @@ const DEFAULT_REMOTE_API_BASE_URL = IS_GITHUB_PAGES_PRODUCTION
 const APP_CONFIG = Object.freeze({
   syncMode: 'local',
   USE_REMOTE_BACKEND: IS_GITHUB_PAGES_PRODUCTION,
+  PUBLIC_READER: IS_GITHUB_PAGES_PRODUCTION,
   apiBaseUrl: DEFAULT_REMOTE_API_BASE_URL,
   ...(globalThis.RECIPE_TRACKER_CONFIG || {}),
 });
@@ -600,6 +603,8 @@ const remoteApi = REMOTE_MODE
       onUnauthorized: clearStoredCredentials,
     })
   : null;
+const PUBLIC_READER = REMOTE_MODE && Boolean(APP_CONFIG.PUBLIC_READER);
+let readerMode = PUBLIC_READER && !getStoredSessionToken();
 let prefs = loadPrefs();
 
 const cloneFilters = (value = DEFAULT_FILTERS) => ({
@@ -732,7 +737,9 @@ function loadLocalState() {
 const initialLocalState = loadLocalState();
 const initialRemoteCache = REMOTE_MODE ? loadRemoteRecipeCache() : { recipes: [], tagRegistry: {} };
 const initialRemoteState = hydrateRecipeState(initialRemoteCache.recipes, initialRemoteCache.tagRegistry);
-const initialDataState = REMOTE_MODE
+const initialDataState = readerMode
+  ? { recipes: [], tagRegistry: {}, hasStoredState: false, requiresTagMigration: false }
+  : REMOTE_MODE
   ? (initialLocalState.hasStoredState
       ? initialLocalState
       : { ...initialRemoteState, hasStoredState: Boolean(initialRemoteCache.recipes.length), requiresTagMigration: false })
@@ -741,7 +748,7 @@ const initialDataState = REMOTE_MODE
 let recipes = initialDataState.recipes;
 let tagRegistry = initialDataState.tagRegistry;
 let editingId = null, viewingId = null;
-let filters = cloneFilters(prefs.filters);
+let filters = cloneFilters(readerMode ? { ...prefs.filters, tags: [], rating: 0 } : prefs.filters);
 let fRating = 0;
 let lastFocusedBeforeModal = null;
 const initialSchemaVersion = getStoredSchemaVersion();
@@ -874,6 +881,7 @@ const topTagsForLibrary = (limit = 8) => {
 };
 
 function persist(options = {}) {
+  if (readerMode) return;
   const hydrated = hydrateRecipeState(recipes, tagRegistry);
   recipes = hydrated.recipes;
   tagRegistry = hydrated.tagRegistry;
@@ -1409,6 +1417,8 @@ function maybeShowBackupNudge() {
 }
 
 function render() {
+  document.body.classList.toggle('reader-mode', readerMode);
+  document.getElementById('familyEditBtn').hidden = !readerMode;
   renderFilterChips();
   renderStats();
   renderGrid();
@@ -1416,7 +1426,7 @@ function render() {
   renderFormSuggestions();
   renderTagInput();
   renderTagManager();
-  maybeShowBackupNudge();
+  if (!readerMode) maybeShowBackupNudge();
 }
 
 async function migrateSeedImagesIfNeeded() {
@@ -1455,6 +1465,7 @@ function ensureAuthModal() {
         </div>
       </form>
       <div class="modal-footer">
+        <button class="btn-secondary" id="authCancelBtn" type="button">Cancel</button>
         <button class="btn-primary" id="authSubmitBtn" type="button">Unlock Library</button>
       </div>
     </div>
@@ -1477,6 +1488,7 @@ function ensureAuthModal() {
       input.select();
     }
   };
+  modal.querySelector('#authCancelBtn').addEventListener('click', () => closeModal('authModal'));
   modal.querySelector('#authSubmitBtn').addEventListener('click', submit);
   modal.querySelector('#authForm').addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -1490,6 +1502,8 @@ function openAuthModal(message = 'Enter the family access code to load the share
   const hint = modal.querySelector('#authHint');
   const input = modal.querySelector('#authCode');
   hint.textContent = message;
+  modal.querySelector('#authCancelBtn').hidden = !PUBLIC_READER;
+  modal.querySelector('#authSubmitBtn').textContent = PUBLIC_READER ? 'Sign in' : 'Unlock Library';
   input.value = '';
   openModal('authModal');
 }
@@ -1497,8 +1511,31 @@ function openAuthModal(message = 'Enter the family access code to load the share
 function handleRemoteAuthFailure(error, message = 'Access expired or changed. Re-enter the family access code to continue.') {
   if (error?.code !== 'UNAUTHORIZED' && Number(error?.status) !== 401) return false;
   clearStoredCredentials();
+  if (PUBLIC_READER) void loadPublicLibrary();
   openAuthModal(message);
   return true;
+}
+
+async function loadPublicLibrary() {
+  if (!readerMode) {
+    readerMode = true;
+    recipes = [];
+    tagRegistry = {};
+    filters = cloneFilters({ ...filters, tags: [], rating: 0 });
+    closeModal('viewModal');
+  }
+  if (!recipes.length) bootError = 'Loading recipes…';
+  render();
+  try {
+    const items = await remoteApi.getPublicRecipes();
+    if (!readerMode) return;
+    recipes = items;
+    bootError = '';
+  } catch {
+    if (!readerMode) return;
+    bootError = 'Could not load recipes. Check your connection and reload.';
+  }
+  render();
 }
 
 async function syncRemoteRecipes({ allowPrompt = true } = {}) {
@@ -1509,15 +1546,25 @@ async function syncRemoteRecipes({ allowPrompt = true } = {}) {
     if (!getStoredSessionToken() && loadStoredFamilyCode()) {
       await migrateLegacyFamilyCode(remoteApi);
     }
+    if (PUBLIC_READER && !getStoredSessionToken()) {
+      await loadPublicLibrary();
+      return;
+    }
 
+    const cachedState = readerMode ? loadRemoteRecipeCache() : { recipes, tagRegistry };
     const state = await bootstrapRemoteRecipes({
       api: remoteApi,
       fallback: {
-        recipes,
-        tagRegistry,
+        recipes: cachedState.recipes,
+        tagRegistry: cachedState.tagRegistry,
         fetchedAt: initialRemoteCache.fetchedAt || '',
       },
     });
+    if (PUBLIC_READER && !state.authenticated) {
+      await loadPublicLibrary();
+      return;
+    }
+    readerMode = false;
     const hydrated = hydrateRecipeState(state.recipes, state.tagRegistry);
     recipes = hydrated.recipes;
     tagRegistry = hydrated.tagRegistry;
@@ -1549,6 +1596,10 @@ async function syncRemoteRecipes({ allowPrompt = true } = {}) {
     render();
   } catch (error) {
     console.error('remote bootstrap failed:', error);
+    if (PUBLIC_READER && !getStoredSessionToken()) {
+      await loadPublicLibrary();
+      return;
+    }
     if (handleRemoteAuthFailure(error, 'Access expired or changed. Re-enter the family access code to load shared recipes.')) {
       render();
       return;
@@ -2176,7 +2227,7 @@ function openView(id) {
   scrollBeforeModal = document.getElementById('recipeGrid').scrollTop;
   viewingId=id;
   const cookLink = document.getElementById('cookViewLink');
-  cookLink.hidden = !r.ingredients?.trim() || !r.instructions?.trim();
+  cookLink.hidden = readerMode || !r.ingredients?.trim() || !r.instructions?.trim();
   cookLink.href = './kitchen.html#' + new URLSearchParams({ cook: String(r.id) });
   prefs = recordView(id, prefs);
   document.getElementById('v-name').textContent=r.name;
@@ -2508,6 +2559,9 @@ if (!REMOTE_MODE && initialSchemaVersion < SCHEMA_VERSION) {
   migrateSeedImagesIfNeeded();
 }
 if (REMOTE_MODE) {
+  document.getElementById('familyEditBtn').addEventListener('click', () => {
+    openAuthModal('Enter the family access code to edit recipes and use Kitchen.');
+  });
   document.getElementById('syncToNotionBtn').hidden = false;
   syncRemoteRecipes();
   window.addEventListener('online', () => {
