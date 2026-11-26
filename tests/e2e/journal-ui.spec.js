@@ -10,6 +10,30 @@ const recipe = {
   tags: ['baking'],
 };
 
+async function expectReadableRecipeDetail(dialog) {
+  const ratios = await dialog.evaluate((modal) => {
+    function luminance(color) {
+      const linearChannels = color.match(/[\d.]+/g).map((channel) => {
+        const value = Number(channel) / 255;
+        return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+      });
+      const [red, green, blue] = linearChannels;
+      return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+    }
+
+    const background = luminance(getComputedStyle(modal).backgroundColor);
+    const selectors = ['.view-subtitle', '.view-label', '.ing-list li', '.method-text'];
+    return selectors.map((selector) => {
+      const foreground = luminance(getComputedStyle(modal.querySelector(selector)).color);
+      const ratio = (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05);
+      return { selector, ratio };
+    });
+  });
+  for (const { selector, ratio } of ratios) {
+    expect(ratio, selector + ' contrast against the recipe surface').toBeGreaterThanOrEqual(4.5);
+  }
+}
+
 for (const viewport of [{ width: 375, height: 812 }, { width: 1440, height: 900 }]) {
   test(`Journal and Kitchen work within a ${viewport.width}px viewport`, async ({ page }) => {
     await page.setViewportSize(viewport);
@@ -29,6 +53,10 @@ for (const viewport of [{ width: 375, height: 812 }, { width: 1440, height: 900 
     });
     expect(await fit()).toBe(true);
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+    const recipeDialog = page.locator('#viewModal .modal');
+    await card.click();
+    await expectReadableRecipeDetail(recipeDialog);
+    await page.getByRole('button', { name: 'Close recipe', exact: true }).click();
 
     await page.getByRole('button', { name: 'Dark mode' }).click();
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
@@ -36,7 +64,9 @@ for (const viewport of [{ width: 375, height: 812 }, { width: 1440, height: 900 
     await expect(card).toBeVisible();
     await card.click();
     await expect(page.getByRole('button', { name: 'Print recipe' })).toBeVisible();
+    await expectReadableRecipeDetail(recipeDialog);
     await page.emulateMedia({ media: 'print' });
+    await expectReadableRecipeDetail(recipeDialog);
     await expect(page.locator('#main')).toBeHidden();
     await expect(page.locator('#viewBody')).toContainText('1 cup flour');
     await expect(page.locator('#viewBody')).toContainText('Bake until golden.');
