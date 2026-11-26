@@ -341,11 +341,23 @@ test('escaping inline tag rename does not close the tag manager modal', async ({
   await expect(input).toHaveCount(0);
 });
 
-test('no console errors or uncaught exceptions on load', async ({ page }) => {
+test('no console errors or uncaught exceptions on load', async ({ page, baseURL }) => {
+  const appOrigin = new URL(baseURL).origin;
+  // Keep startup assertions independent of the third-party recipe image hosts.
+  await page.route((url) => url.origin !== appOrigin, (route) => {
+    if (route.request().resourceType() !== 'image') return route.continue();
+    return route.fulfill({
+      contentType: 'image/svg+xml',
+      body: '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>',
+    });
+  });
+
   const errors = [];
   page.on('pageerror', (e) => errors.push(String(e)));
   page.on('console', (msg) => {
-    if (msg.type() === 'error') errors.push(msg.text());
+    if (msg.type() !== 'error') return;
+    const { url } = msg.location();
+    errors.push(url ? msg.text() + ' (' + url + ')' : msg.text());
   });
 
   await freshPage(page);
