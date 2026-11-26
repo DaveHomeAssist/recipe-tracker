@@ -1,4 +1,4 @@
-const CACHE_VERSION = '2026-11-26-12';
+const CACHE_VERSION = '2026-11-26-13';
 const CACHE_NAME = `recipe-journal-${CACHE_VERSION}`;
 const APP_SHELL = [
   './',
@@ -30,7 +30,8 @@ const INDEX_URL = new URL('./index.html', self.location).toString();
 
 async function warmAppShell() {
   const cache = await caches.open(CACHE_NAME);
-  await cache.addAll(APP_SHELL);
+  // Precache this deployment’s files instead of reusing the prior HTTP cache.
+  await cache.addAll(APP_SHELL.map((path) => new Request(path, { cache: 'reload' })));
 }
 
 async function putInCache(request, response) {

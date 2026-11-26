@@ -440,6 +440,21 @@
   </div>
 </div>
 
+<div class="library-display-options" id="libraryDisplayOptions">
+  <div class="library-display-option"><label for="libraryView">View</label>
+    <select id="libraryView" aria-controls="recipeGrid">
+      <option value="grid">Photo Grid</option>
+      <option value="list">Compact List</option>
+    </select>
+  </div>
+  <div class="library-display-option"><label for="librarySort">Sort by</label>
+    <select id="librarySort" aria-controls="recipeGrid">
+      <option value="default">Default</option>
+      <option value="name-asc">Name A–Z</option>
+      <option value="name-desc">Name Z–A</option>
+    </select>
+  </div>
+</div>
 <div class="recipe-grid" id="recipeGrid" role="list" aria-label="Recipe grid"></div>
 </div>
 
@@ -791,6 +806,12 @@ const inspectorBody = document.getElementById('viewBody');
 const inspectorActions = document.getElementById('recipeActions');
 const libraryBrowser = document.getElementById('libraryBrowser');
 const recipeGrid = document.getElementById('recipeGrid');
+const libraryView = document.getElementById('libraryView');
+const librarySort = document.getElementById('librarySort');
+libraryView.value = 'grid';
+librarySort.value = 'default';
+libraryView.addEventListener('change', renderGrid);
+librarySort.addEventListener('change', renderGrid);
 const thanksgivingMode = new URLSearchParams(location.search).get('collection') === 'thanksgiving';
 const libraryTitle = document.getElementById('libraryTitle');
 const libraryHeading = libraryTitle.parentElement;
@@ -801,6 +822,7 @@ if (thanksgivingMode) {
   libraryTitle.tabIndex = -1;
   document.getElementById('libraryTab').removeAttribute('aria-current');
   document.getElementById('thanksgivingTab').setAttribute('aria-current', 'page');
+  document.getElementById('libraryDisplayOptions').hidden = true;
   recipeGrid.removeAttribute('role');
   recipeGrid.removeAttribute('aria-label');
 }
@@ -983,14 +1005,17 @@ function renderStats() {
 }
 
 function renderGrid() {
-  const g = document.getElementById('recipeGrid');
+  const g = recipeGrid;
+  const compact = !thanksgivingMode && libraryView.value === 'list';
+  g.classList.toggle('recipe-list', compact);
+  if (!thanksgivingMode) g.setAttribute('aria-label', compact ? 'Recipe list' : 'Recipe grid');
   if (bootError && !recipes.length) {
     g.innerHTML = `<div class="empty-state"><div class="ei">☁️</div><p>${escapeHtml(bootError)}</p></div>`;
     return;
   }
   g.innerHTML = thanksgivingMode
     ? renderThanksgivingMenu(recipes, tagRegistry)
-    : renderGridHtml(recipes, { filters, tagRegistry });
+    : renderGridHtml(recipes, { filters, tagRegistry, compact, sort: librarySort.value });
   for (const image of g.querySelectorAll('.card-image img')) {
     const showPlaceholder = () => {
       image.parentElement.classList.add('card-image-empty');

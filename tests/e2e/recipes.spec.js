@@ -448,3 +448,42 @@ test('XSS hardening: a manually added recipe with an <img onerror> name renders 
   const fired = await page.evaluate(() => window.__xssFired === true);
   expect(fired).toBe(false);
 });
+
+test('library view and sort controls keep active filters and recipe interactions', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 700 });
+  await freshPage(page);
+
+  const view = page.getByLabel('View', { exact: true });
+  const sort = page.getByLabel('Sort by');
+  const cards = page.locator('#recipeGrid .card');
+  await expect(view).toHaveValue('grid');
+  await expect(sort).toHaveValue('default');
+
+  await page.locator('[data-cuisine-filter="Italian"]').click();
+  await cards.locator('[data-card-tag]').first().click();
+  const firstTitle = await cards.first().locator('.card-title').textContent();
+  await page.getByRole('searchbox').fill(firstTitle);
+  await expect(cards.first().locator('.card-title')).toHaveText(firstTitle);
+  const filterChips = await page.locator('#activeFilters').innerText();
+  const recipeIds = () => cards.evaluateAll((items) => items.map((card) => card.dataset.id));
+  const before = await recipeIds();
+
+  await view.selectOption('list');
+  await sort.selectOption('name-desc');
+  await expect(page.getByRole('list', { name: 'Recipe list' })).toBeVisible();
+  await expect(page.locator('#recipeGrid .card-image')).toHaveCount(0);
+  await expect(page.locator('#activeFilters')).toHaveText(filterChips, { useInnerText: true });
+  await expect(page.getByRole("searchbox")).toHaveValue(firstTitle);
+  expect((await recipeIds()).sort()).toEqual(before.sort());
+  expect(await page.locator('#libraryDisplayOptions').evaluate((controls) =>
+    controls.scrollWidth <= controls.clientWidth)).toBe(true);
+
+  await cards.first().focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#recipeInspector')).toBeVisible();
+  await expect(page.locator('#recipeInspector')).toContainText(firstTitle);
+
+  await page.goto('/index.html?collection=thanksgiving');
+  await expect(view).toBeHidden();
+  await expect(page.locator('.thanksgiving-course').first()).toBeVisible();
+});
