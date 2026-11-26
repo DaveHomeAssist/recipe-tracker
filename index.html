@@ -927,6 +927,13 @@ function renderGrid() {
     return;
   }
   g.innerHTML = renderGridHtml(recipes, { filters, tagRegistry });
+  if (readerMode) {
+    for (const image of g.querySelectorAll('.card-image img')) {
+      const hideFailedImage = () => { image.parentElement.hidden = true; };
+      if (image.complete && !image.naturalWidth) hideFailedImage();
+      else image.addEventListener('error', hideFailedImage, { once: true });
+    }
+  }
   g.querySelectorAll('.card').forEach(el=>el.addEventListener('click',e=>{
     if(e.target.closest('.edit-btn')||e.target.closest('.del-btn')) return;
     openView(el.dataset.id);
@@ -1526,16 +1533,33 @@ async function loadPublicLibrary() {
   }
   if (!recipes.length) bootError = 'Loading recipes…';
   render();
+  let items;
   try {
-    const items = await remoteApi.getPublicRecipes();
-    if (!readerMode) return;
-    recipes = items;
-    bootError = '';
+    items = await remoteApi.getPublicRecipes();
   } catch {
     if (!readerMode) return;
     bootError = 'Could not load recipes. Check your connection and reload.';
+    render();
+    return;
   }
+  if (!readerMode) return;
+  recipes = items;
+  bootError = '';
   render();
+
+  try {
+    const result = await mergeSeedImages(items, { publicSources: true });
+    if (!readerMode || recipes !== items || !result.changed) return;
+    const focusedRecipe = document.activeElement?.closest('.recipe-grid .card')?.dataset.id;
+    recipes = result.recipes;
+    renderGrid();
+    if (focusedRecipe) {
+      document.querySelector('.recipe-grid .card[data-id="' + CSS.escape(focusedRecipe) + '"]')
+        ?.focus({ preventScroll: true });
+    }
+  } catch {
+    // The public library remains usable if the photo catalog is unavailable.
+  }
 }
 
 async function syncRemoteRecipes({ allowPrompt = true } = {}) {
