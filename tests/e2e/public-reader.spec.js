@@ -64,3 +64,36 @@ test('public visitors browse without a code, and family sign-in restores editing
   await expect(page.locator('#viewBody')).toContainText('Private family note');
   await expect(page.getByRole('button', { name: 'Edit', exact: true })).toBeVisible();
 });
+
+test('guest cards show matched source photos and collapse failed images', async ({ page }) => {
+  await page.addInitScript(() => {
+    window.RECIPE_TRACKER_CONFIG = { PUBLIC_READER: true, USE_REMOTE_BACKEND: true };
+  });
+  const goodImage = 'https://images.example.test/bread.jpg';
+  const brokenImage = 'https://images.example.test/soup.jpg';
+  await page.route('**/api/v1/public-recipes', (route) => route.fulfill({ json: { data: [
+    { id: 'bread', name: 'Bread', url: 'https://recipes.example.test/bread/' },
+    { id: 'soup', name: 'Soup', url: 'https://recipes.example.test/soup' },
+    { id: 'salad', name: 'Salad', url: 'https://recipes.example.test/salad' },
+  ] } }));
+  await page.route('**/build/public/recipes.json', (route) => route.fulfill({ json: [
+    { url: 'https://recipes.example.test/bread?utm_source=newsletter', image: goodImage },
+    { url: 'https://recipes.example.test/soup', image: brokenImage },
+    { url: 'https://recipes.example.test/salad?recipe=other', image: goodImage },
+  ] }));
+  await page.route(goodImage, (route) => route.fulfill({
+    contentType: 'image/svg+xml',
+    body: '<svg xmlns="http://www.w3.org/2000/svg" width="2" height="2"/>',
+  }));
+  await page.route(brokenImage, (route) => route.abort());
+
+  await page.goto('./index.html');
+  const bread = page.locator('.card[data-id="bread"] img');
+  await expect(bread).toHaveAttribute('src', goodImage);
+  await expect.poll(() => bread.evaluate((image) => image.naturalWidth)).toBeGreaterThan(0);
+
+  const soup = page.locator('.card[data-id="soup"]');
+  await expect(soup.locator('.card-image')).toHaveAttribute('hidden', '');
+  await expect(soup.locator('.card-image')).toBeHidden();
+  await expect(page.locator('.card[data-id="salad"] img')).toHaveCount(0);
+});
