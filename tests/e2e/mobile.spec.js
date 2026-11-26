@@ -71,3 +71,23 @@ test('card icon buttons meet the 44px touch target at 375px', async ({ page }, t
   expect(box.width).toBeGreaterThanOrEqual(44);
   expect(box.height).toBeGreaterThanOrEqual(44);
 });
+
+test('short landscape keeps recipes scrollable below the Library controls', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile-320', 'one landscape run');
+  await page.setViewportSize({ width: 667, height: 277 });
+  await freshPage(page);
+  const library = page.locator('#libraryBrowser');
+
+  const lastCard = library.locator('.card').last();
+  await lastCard.scrollIntoViewIfNeeded();
+  await expect(lastCard.locator('.card-title')).toBeInViewport();
+  await expect(page.getByRole('link', { name: 'Library', exact: true })).toBeInViewport();
+  await expect.poll(() => library.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+
+  await lastCard.click();
+  await expect(page.locator('#recipeInspector')).toBeVisible();
+  await page.getByRole('button', { name: /Back to recipes/ }).click();
+  await expect(page.locator('#recipeInspector')).toBeHidden();
+  await expect(lastCard).toBeFocused();
+  await expect(lastCard.locator('.card-title')).toBeInViewport();
+});

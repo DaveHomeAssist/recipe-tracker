@@ -74,7 +74,7 @@ test('mobile Back and browser Back restore the filtered list and its scroll', as
   await search.fill('wood oven');
   await page.locator('[data-cuisine-filter="French"]').click();
   const card = page.locator('.card[data-id="bread-20"]');
-  const grid = page.locator('#recipeGrid');
+  const grid = page.locator('#libraryBrowser');
   await card.scrollIntoViewIfNeeded();
   const before = await grid.evaluate((element) => element.scrollTop);
   expect(before).toBeGreaterThan(0);

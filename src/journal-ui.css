@@ -331,6 +331,16 @@ body.library-page, body.kitchen-page {
   color: var(--journal-on-action);
 }
 .kitchen-page .flash { background: var(--journal-wash); }
+@media (max-width: 760px), (max-width: 959px) and (max-height: 530px) {
+  .library-page .library-browser {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .library-page .recipe-grid {
+    flex: 1 0 auto;
+    overflow: visible;
+  }
+}
 @media (max-width: 760px) {
   .app-masthead { min-height: 52px; justify-content: space-between; }
   .app-nav {
@@ -364,8 +374,20 @@ body.library-page, body.kitchen-page {
     scrollbar-width: thin;
   }
   .library-page .toolbar-actions > button { flex-shrink: 0; padding: 6px 11px; }
+  .library-page.reader-mode .toolbar:has(#familyEditBtn:not([hidden])) {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: 6px;
+  }
+  .library-page.reader-mode .toolbar-actions:has(#familyEditBtn:not([hidden])) {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .library-page.reader-mode .toolbar-actions:not(:has(#familyEditBtn:not([hidden]))) {
+    display: none;
+  }
   .library-page .filter-row { grid-template-columns: 52px minmax(0, 1fr); }
-  .library-page .filter-btn { min-height: 36px; }
+  .library-page .filter-btn { min-height: 44px; }
   .library-page .recipe-grid { --recipe-columns: repeat(2, minmax(0, 1fr)); }
   .library-page .card-body { padding: 8px; }
   .library-page .card-title { font-size: 1rem; }
@@ -386,6 +408,9 @@ body.library-page, body.kitchen-page {
 }
 @media (max-height: 530px) and (orientation: landscape) {
   .library-heading { padding-block: 4px; }
+  .library-opening {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
   .library-page .toolbar { grid-template-columns: minmax(160px, 1fr) auto; }
   .library-page .toolbar-actions { grid-column: 2; grid-row: 1; }
 }
