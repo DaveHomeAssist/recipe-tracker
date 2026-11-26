@@ -1,4 +1,4 @@
-const CACHE_VERSION = '2026-11-26-10';
+const CACHE_VERSION = '2026-11-26-11';
 const CACHE_NAME = `recipe-journal-${CACHE_VERSION}`;
 const APP_SHELL = [
   './',
