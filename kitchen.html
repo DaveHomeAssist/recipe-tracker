@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta name="robots" content="noindex, nofollow">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#b8895f">
 <title>Kitchen · Recipe Journal</title>
@@ -251,9 +252,23 @@ import * as Cook from './src/cook-mode.js';
 import { getRecipeTagText } from './src/recipe-lib.js';
 import { searchText } from './src/recipe-render.js';
 import { getStoredSessionToken } from './src/session-storage.js';
+
 import { tokenizeWithTimers, parseDurations, startTimer, cancelTimer, activeTimerIds, timerRemaining, onTimerEvent, acquireWakeLock, releaseWakeLock } from './src/cook-timer.js';
 import { createStoresApi } from './src/stores-api.js';
 import { enqueuePut, pushQueue, pullAll, pendingCount, loadVersions } from './src/stores-remote.js';
+
+
+if ((location.hostname === 'davehomeassist.github.io' || globalThis.RECIPE_TRACKER_CONFIG?.PUBLIC_READER) && !getStoredSessionToken()) {
+  document.getElementById('main').replaceChildren();
+  const message = document.createElement('p');
+  message.className = 'card';
+  message.textContent = 'Kitchen is for family members. Open the Library and select Sign in to edit.';
+  document.getElementById('main').append(message);
+} else {
+  await initializeKitchen();
+}
+
+async function initializeKitchen() {
 
 // ---- Aisle map ----
 let AISLE = {};
@@ -878,6 +893,7 @@ if (!recipes.length) {
   flash('No recipes found in local storage. Open the main Recipe Journal first so this page sees your library.');
 }
 
+}
 </script>
 </body>
 </html>

@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import healthHandler from '../../api/v1/health.js';
+import publicRecipesHandler from '../../api/v1/public-recipes.js';
+import privateStoreHandler from '../../api/v1/stores/[store].js';
 import recipeHandler from '../../api/v1/recipes/index.js';
 import recipeItemHandler from '../../api/v1/recipes/[id].js';
 import recipeSyncHandler from '../../api/v1/recipes/sync.js';
@@ -106,6 +108,54 @@ describe('recipe proxy handlers', () => {
     __setNotionClientForTests(null);
     process.env = { ...originalEnv };
     vi.restoreAllMocks();
+  });
+
+  it('serves only selected recipe fields without a family session', async () => {
+    __setNotionClientForTests({
+      dataSources: { query: vi.fn().mockResolvedValue({
+        results: [makePage({
+          url: 'https://example.com/cacio?subscriber=private#notes',
+          image: 'https://example.com/a-private-family-photo.jpg',
+        })],
+        has_more: false,
+      }) },
+      pages: {},
+    });
+
+    const res = makeRes();
+    await publicRecipesHandler(makeReq(), res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['X-Robots-Tag']).toBe('noindex, nofollow');
+    expect(JSON.parse(res.body)).toEqual({ data: [{
+      id: 'public-0',
+      name: 'Cacio e Pepe',
+      cuisine: 'Italian',
+      ingredients: 'pecorino',
+      instructions: 'mix',
+      preptime: '10 min',
+      cooktime: '20 min',
+      servings: '2',
+      url: 'https://example.com/cacio',
+    }] });
+  });
+
+  it('rejects guest writes and guest access to private recipes and household stores', async () => {
+    const calls = [
+      [publicRecipesHandler, 'POST', 405],
+      [recipeHandler, 'GET', 401],
+      [recipeHandler, 'POST', 401],
+      [recipeItemHandler, 'PATCH', 401],
+      [recipeItemHandler, 'DELETE', 401],
+      [recipeSyncHandler, 'POST', 401],
+      [privateStoreHandler, 'GET', 401],
+      [privateStoreHandler, 'PUT', 401],
+    ];
+    for (const [handler, method, status] of calls) {
+      const res = makeRes();
+      await handler(makeReq({ method }), res);
+      expect(res.statusCode).toBe(status);
+    }
   });
 
   it('returns recipe rows from GET /api/v1/recipes', async () => {
