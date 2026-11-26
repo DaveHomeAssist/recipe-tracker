@@ -310,7 +310,7 @@ body.library-page, body.kitchen-page {
   align-items: center;
   justify-content: center;
   gap: 4px;
-  min-height: 40px;
+  min-height: 44px;
   border-radius: 6px;
 }
 .kitchen-page .kitchen-icon { display: block; flex: none; object-fit: contain; }

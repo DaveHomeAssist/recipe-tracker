@@ -103,3 +103,18 @@ test('Big Game grocery review preserves source amounts and hands off to a privat
   await expect(link).toHaveAttribute('href', trip);
   await expect(output).toBeEmpty();
 });
+
+for (const [width, height] of [[667, 375], [820, 1180]]) {
+  test(`Kitchen tabs remain tappable at ${width} × ${height}`, async ({ page }) => {
+    await page.setViewportSize({ width, height });
+    await page.goto('./kitchen.html');
+    const tabs = page.getByRole('navigation', { name: 'Kitchen views' }).getByRole('button');
+    await expect(tabs).toHaveCount(5);
+    for (const tab of await tabs.all()) {
+      await expect(tab).toBeInViewport();
+      const box = await tab.boundingBox();
+      expect(box.width).toBeGreaterThanOrEqual(44);
+      expect(box.height).toBeGreaterThanOrEqual(44);
+    }
+  });
+}
