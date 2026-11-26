@@ -319,31 +319,148 @@ body.library-page, body.kitchen-page {
 @media (prefers-reduced-motion: reduce) {
   .kitchen-page *, .kitchen-page *::before, .kitchen-page *::after { animation: none !important; }
 }
+.library-browser {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.library-page .card[aria-current="true"] {
+  border-color: var(--journal-action);
+  box-shadow: inset 0 0 0 1px var(--journal-action);
+  background: var(--journal-wash);
+}
+.recipe-inspector:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--journal-surface);
+  color: var(--journal-ink);
+}
+.inspector-header {
+  position: relative;
+  flex: none;
+  padding: 18px clamp(16px, 2vw, 30px) 14px;
+  border-bottom: 1px solid var(--journal-border);
+}
+.inspector-header .view-title {
+  margin-inline-end: 38px;
+  overflow-wrap: anywhere;
+}
+.inspector-header .view-subtitle {
+  margin-bottom: 0;
+  padding: 0;
+  border: 0;
+  overflow-wrap: anywhere;
+}
+.inspector-header .view-subtitle:empty { display: none; }
+.inspector-header .close-btn {
+  position: absolute;
+  inset: 10px 10px auto auto;
+  width: 44px;
+  height: 44px;
+  color: var(--journal-ink);
+  opacity: 1;
+}
+.inspector-actions {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+.inspector-actions summary {
+  display: list-item;
+  align-content: center;
+  cursor: pointer;
+}
+.inspector-menu {
+  position: absolute;
+  z-index: 1;
+  inset: calc(100% + 4px) 0 auto auto;
+  display: flex;
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid var(--journal-border);
+  border-radius: 8px;
+  background: var(--journal-surface);
+}
+.inspector-menu button { min-height: 44px; }
+.inspector-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 18px clamp(16px, 2vw, 30px) 28px;
+  overflow-wrap: anywhere;
+}
+.inspector-body .method-text, .inspector-body .ing-list li {
+  color: var(--journal-ink);
+  font-size: 1rem;
+}
+.inspector-notes { white-space: pre-wrap; }
+#backToRecipesBtn { display: none; }
+
+@media screen and (min-width: 960px) {
+  .library-page #main:has(.recipe-inspector:not([hidden])) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 40%);
+    grid-template-rows: minmax(0, 1fr);
+  }
+  .recipe-inspector { border-inline-start: 1px solid var(--journal-border); }
+}
+@media screen and (max-width: 959px) {
+  .library-page:has(.recipe-inspector:not([hidden])) .app-masthead,
+  .library-page:has(.recipe-inspector:not([hidden])) .skip-link,
+  .library-page:has(.recipe-inspector:not([hidden])) .library-browser { visibility: hidden; }
+  .recipe-inspector:not([hidden]) {
+    position: fixed;
+    z-index: 25;
+    inset: 0;
+  }
+  .inspector-header { padding-top: max(12px, env(safe-area-inset-top)); }
+  .inspector-header .view-title { margin-inline-end: 0; }
+  .inspector-body { padding-bottom: calc(24px + var(--journal-bottom)); }
+  #closeViewBtn { display: none; }
+  #backToRecipesBtn { display: inline-block; margin-bottom: 10px; }
+}
 @media print {
-  html, body.library-page { height: auto; overflow: visible; background: #fff; color: #000; }
-  .library-page:has(#viewModal.open) > :not(#viewModal) { display: none !important; }
-  .library-page #viewModal.open, .library-page #viewModal.open .modal {
-    display: block;
-    position: static;
-    width: auto;
-    max-width: none !important;
-    max-height: none;
+  html, body.library-page {
+    height: auto;
     overflow: visible;
-    padding: 0;
-    transform: none;
-    border: 0;
-    box-shadow: none;
+    color-scheme: light;
     background: #fff;
     color: #000;
   }
-  .library-page #viewModal .modal-header, .library-page #viewModal .modal-body { padding: 0; }
-  .library-page #viewModal .modal-body { overflow: visible; max-height: none; }
-  .library-page #viewModal .close-btn, .library-page #viewModal .modal-footer { display: none; }
-  .library-page #viewModal .view-title, .library-page #viewModal .view-label,
-  .library-page #viewModal .view-subtitle, .library-page #viewModal .view-val,
-  .library-page #viewModal .ing-list li, .library-page #viewModal .method-text,
-  .library-page #viewModal a { color: #000; }
-  .library-page #viewModal .view-field { overflow-wrap: anywhere; }
+  .library-page:has(.recipe-inspector:not([hidden])) > :not(#main),
+  .library-page #main:has(.recipe-inspector:not([hidden])) > :not(.recipe-inspector),
+  .recipe-inspector .inspector-actions,
+  #closeViewBtn, #backToRecipesBtn { display: none !important; }
+  .library-page #main:has(.recipe-inspector:not([hidden])),
+  .recipe-inspector:not([hidden]), .inspector-header, .inspector-body {
+    display: block;
+    height: auto;
+    overflow: visible;
+    background: #fff;
+    color: #000;
+    border: 0;
+    padding: 0;
+  }
+  .recipe-inspector {
+    --journal-ink: #000;
+    --journal-muted: #000;
+    --journal-highlight: #000;
+    --journal-danger: #000;
+  }
+  .recipe-inspector .view-title, .recipe-inspector .view-label,
+  .recipe-inspector .view-subtitle, .recipe-inspector .view-val,
+  .recipe-inspector a { color: #000; }
+  .recipe-inspector .view-label { break-after: avoid; }
+  .recipe-inspector .view-subtitle { margin-bottom: 12px; }
+  .recipe-inspector .tag { color: #000; background: transparent; }
 }
 
 .library-page #cookViewLink:not([hidden]) {
@@ -372,8 +489,6 @@ body.library-page, body.kitchen-page {
 .reader-mode #exportBtn,
 .reader-mode #importBtn,
 .reader-mode #syncToNotionBtn,
-.reader-mode #editViewBtn,
-.reader-mode #deleteViewBtn,
 .reader-mode .card-actions,
 .reader-mode .filter-row:has(#tagFilterBtns) {
   display: none;

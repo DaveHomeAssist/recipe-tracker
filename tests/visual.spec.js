@@ -70,13 +70,13 @@ test('full grid matches the desktop baseline', async ({ page }) => {
   });
 });
 
-test('view modal matches the desktop baseline', async ({ page }) => {
+test('recipe inspector matches the desktop baseline', async ({ page }) => {
   await freshPage(page);
   await page.locator('.recipe-grid .card').first().click();
-  await expect(page.locator('#viewModal')).toHaveClass(/open/);
+  await expect(page.locator('#recipeInspector')).toBeVisible();
   await stabilizePage(page);
 
-  await expect(page).toHaveScreenshot('view-modal.png', {
+  await expect(page).toHaveScreenshot('recipe-inspector.png', {
     fullPage: true,
     maxDiffPixelRatio: 0.02,
     timeout: 45_000,

@@ -37,6 +37,18 @@ test('public visitors browse without a code, and family sign-in restores editing
     await route.fulfill({ json: { data: [{ ...publicRecipe, id: 'family-1', notes: 'Private family note' }] } });
   });
 
+  let deleteRequests = 0;
+  await page.route('**/api/v1/recipes/family-1', async (route) => {
+    expect(route.request().method()).toBe('DELETE');
+    expect(route.request().headers().authorization).toBe('Bearer synthetic-family-session');
+    deleteRequests += 1;
+    if (deleteRequests === 1) {
+      await route.fulfill({ status: 409, json: { error: { message: 'Recipe changed on another device' } } });
+    } else {
+      await route.fulfill({ status: 204 });
+    }
+  });
+
   await page.goto('./index.html');
   await expect(page.getByRole('heading', { name: 'Enter Family Access Code' })).toHaveCount(0);
   const card = page.locator('.recipe-grid .card').filter({ hasText: publicRecipe.name });
@@ -45,7 +57,8 @@ test('public visitors browse without a code, and family sign-in restores editing
   await expect(page.getByRole('button', { name: 'Add Recipe', exact: true })).toBeHidden();
   await card.click();
   await expect(page.getByRole('button', { name: 'Print recipe' })).toBeVisible();
-  await expect(page.locator('#editViewBtn')).toBeHidden();
+  await expect(page.locator('#recipeActions')).toBeHidden();
+  await expect(page.locator('#cookViewLink')).toBeHidden();
   await page.getByRole('button', { name: 'Close recipe', exact: true }).click();
 
   await page.goto('./kitchen.html');
@@ -62,7 +75,34 @@ test('public visitors browse without a code, and family sign-in restores editing
   await expect(signedInCard).toBeVisible();
   await signedInCard.click();
   await expect(page.locator('#viewBody')).toContainText('Private family note');
+  await page.locator('#recipeActions summary').click();
   await expect(page.getByRole('button', { name: 'Edit', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Cook this recipe' })).toBeVisible();
+
+  const inspector = page.locator('#recipeInspector');
+  const confirm = page.getByRole('dialog', { name: 'Delete recipe?' });
+  await inspector.getByRole('button', { name: 'Delete', exact: true }).click();
+  await expect(confirm).toContainText(publicRecipe.name);
+  await confirm.getByRole('button', { name: 'Cancel' }).click();
+  await expect(confirm).toBeHidden();
+  await expect(inspector).toBeVisible();
+  expect(deleteRequests).toBe(0);
+
+  await inspector.locator('summary').click();
+  await inspector.getByRole('button', { name: 'Delete', exact: true }).click();
+  await confirm.getByRole('button', { name: 'Delete recipe', exact: true }).click();
+  await expect(page.locator('#toast')).toContainText('Delete failed: Recipe changed on another device');
+  await expect(inspector).toBeVisible();
+  await expect(signedInCard).toHaveAttribute('aria-current', 'true');
+
+  await inspector.locator('summary').click();
+  await inspector.getByRole('button', { name: 'Delete', exact: true }).click();
+  await confirm.getByRole('button', { name: 'Delete recipe', exact: true }).click();
+  await expect(confirm).toBeHidden();
+  await expect(inspector).toBeHidden();
+  await expect(signedInCard).toHaveCount(0);
+  await expect(page.getByRole('searchbox', { name: 'Search recipes' })).toBeFocused();
+  expect(deleteRequests).toBe(2);
 });
 
 test('guest cards show matched source photos and collapse failed images', async ({ page }) => {

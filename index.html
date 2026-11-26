@@ -399,6 +399,7 @@
 </div>
 
 <main id="main" tabindex="-1">
+<div class="library-browser" id="libraryBrowser">
 <div class="library-heading">
   <h1>Recipe library</h1>
   <div class="stats-bar" id="statsBar" aria-live="polite"></div>
@@ -432,6 +433,28 @@
 </div>
 
 <div class="recipe-grid" id="recipeGrid" role="list" aria-label="Recipe grid"></div>
+</div>
+
+<section class="recipe-inspector" id="recipeInspector" aria-labelledby="v-name" hidden>
+  <div class="inspector-header">
+    <button class="btn-secondary" id="backToRecipesBtn" type="button">← Back to recipes</button>
+    <button class="close-btn" id="closeViewBtn" type="button" aria-label="Close recipe">✕</button>
+    <h2 class="view-title" id="v-name" tabindex="-1"></h2>
+    <div class="view-subtitle" id="v-sub"></div>
+    <div class="inspector-actions">
+      <button class="btn-secondary" id="printViewBtn" type="button">Print recipe</button>
+      <a class="btn-secondary" id="cookViewLink" href="./kitchen.html" hidden>Cook this recipe</a>
+      <details id="recipeActions" hidden>
+        <summary class="btn-secondary">More</summary>
+        <div class="inspector-menu">
+          <button class="btn-secondary" id="editViewBtn" type="button">Edit</button>
+          <button class="btn-danger" id="deleteViewBtn" type="button">Delete</button>
+        </div>
+      </details>
+    </div>
+  </div>
+  <div class="inspector-body" id="viewBody" tabindex="0" role="region" aria-label="Recipe details"></div>
+</section>
 </main>
 
 <!-- MANUAL ADD/EDIT MODAL -->
@@ -491,23 +514,14 @@
   </div>
 </div>
 
-<!-- VIEW MODAL -->
-<div class="modal-overlay" id="viewModal">
-  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="v-name" style="max-width:640px;">
-    <div class="modal-header">
-      <div>
-        <h2 class="view-title" id="v-name"></h2>
-        <div class="view-subtitle" id="v-sub"></div>
-      </div>
-      <button class="close-btn" id="closeViewBtn" aria-label="Close recipe">✕</button>
-    </div>
-    <div class="modal-body" id="viewBody"></div>
+<!-- SHARED RECIPE DELETE CONFIRMATION -->
+<div class="modal-overlay" id="deleteRecipeModal">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="deleteRecipeTitle" aria-describedby="deleteRecipeMessage">
+    <div class="modal-header"><h2 id="deleteRecipeTitle">Delete recipe?</h2></div>
+    <div class="modal-body" id="deleteRecipeMessage"></div>
     <div class="modal-footer">
-      <a class="btn-secondary" id="cookViewLink" href="./kitchen.html" hidden>Cook this recipe</a>
-      <button class="btn-secondary" id="printViewBtn" type="button">Print recipe</button>
-      <button class="btn-danger" id="deleteViewBtn">Delete</button>
-      <button class="btn-secondary" id="editViewBtn">Edit</button>
-      <button class="btn-primary" id="closeView2Btn">Close</button>
+      <button class="btn-secondary" id="cancelRecipeDelete" type="button">Cancel</button>
+      <button class="btn-danger" id="confirmRecipeDelete" type="button">Delete recipe</button>
     </div>
   </div>
 </div>
@@ -760,7 +774,16 @@ let toastTimer = null;
 let swReloaded = false;
 let shouldReloadForUpdate = false;
 let bootError = '';
-let scrollBeforeModal = 0;
+const compactInspector = matchMedia('(max-width: 959px)');
+const inspector = document.getElementById('recipeInspector');
+const inspectorBody = document.getElementById('viewBody');
+const inspectorActions = document.getElementById('recipeActions');
+const libraryBrowser = document.getElementById('libraryBrowser');
+const recipeGrid = document.getElementById('recipeGrid');
+let inspectorIdentity = null;
+let compactGridScroll = 0;
+let pendingRecipeDelete = null;
+let deletingRecipe = false;
 let recentSearchTimer = null;
 let searchFocused = false;
 let lastBackupNudgeCount = 0;
@@ -779,6 +802,8 @@ let tagManagerState = {
 const sameId = (a, b) => String(a) === String(b);
 const makeRecipeId = () =>
   globalThis.crypto?.randomUUID?.() || `recipe-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+const inspectorHistoryToken = makeRecipeId();
 
 function announceLiveRegion(id, message, cacheKey) {
   if (!message) return;
@@ -941,7 +966,7 @@ function renderGrid() {
     openView(el.dataset.id);
   }));
   g.querySelectorAll('.edit-btn').forEach(el=>el.addEventListener('click',e=>{e.stopPropagation();openEdit(el.dataset.id);}));
-  g.querySelectorAll('.del-btn').forEach(el=>el.addEventListener('click',e=>{e.stopPropagation();del(el.dataset.id);}));
+  g.querySelectorAll('.del-btn').forEach(el=>el.addEventListener('click',e=>{e.stopPropagation();requestDelete(el.dataset.id);}));
   g.querySelectorAll('[data-card-tag]').forEach((button) => {
     button.addEventListener('click', (event) => {
       event.stopPropagation();
@@ -959,13 +984,15 @@ function renderGrid() {
   g.querySelectorAll('.card').forEach(c => {
     c.setAttribute('role', 'listitem');
     c.setAttribute('tabindex', '0');
+    c.setAttribute('aria-controls', 'recipeInspector');
     c.addEventListener('keydown', (event) => {
       if (event.target === c && (event.key === 'Enter' || event.key === ' ')) {
         event.preventDefault();
-        openView(c.dataset.id);
+        openView(c.dataset.id, { focusHeading: true });
       }
     });
   });
+  updateSelectedCard();
 }
 
 function applyFilters(nextFilters) {
@@ -1431,6 +1458,7 @@ function render() {
   renderFilterChips();
   renderStats();
   renderGrid();
+  refreshInspector();
   renderRecentSearches();
   renderFormSuggestions();
   renderTagInput();
@@ -1531,7 +1559,7 @@ async function loadPublicLibrary() {
     recipes = [];
     tagRegistry = {};
     filters = cloneFilters({ ...filters, tags: [], rating: 0 });
-    closeModal('viewModal');
+    closeInspector({ restoreFocus: false });
   }
   if (!recipes.length) bootError = 'Loading recipes…';
   render();
@@ -1924,7 +1952,7 @@ function openEdit(id) {
   setFStars(r.rating||0);
   setFormTags(r.tags || []);
   renderFormSuggestions();
-  closeModal('viewModal'); openModal('formModal');
+  openModal('formModal');
 }
 
 document.getElementById('openAddBtn').addEventListener('click', openAdd);
@@ -2248,19 +2276,128 @@ document.getElementById('tagManagerModal').addEventListener('click', (event) => 
 // ══════════════════════════════════════════════
 // VIEW
 // ══════════════════════════════════════════════
-function openView(id) {
-  const r=recipes.find(x=>sameId(x.id, id)); if(!r) return;
-  scrollBeforeModal = document.getElementById('recipeGrid').scrollTop;
-  viewingId=id;
+function recipeIdentity(recipe) {
+  return readerMode ? JSON.stringify([String(recipe.id), recipe.name, recipe.url]) : String(recipe.id);
+}
+
+function selectedCard() {
+  return viewingId === null ? null : recipeGrid.querySelector(`.card[data-id="${CSS.escape(String(viewingId))}"]`);
+}
+
+function updateSelectedCard() {
+  recipeGrid.querySelector('.card[aria-current]')?.removeAttribute('aria-current');
+  selectedCard()?.setAttribute('aria-current', 'true');
+}
+
+function inspectorHistoryEntry() {
+  const entry = history.state?.recipeInspector;
+  return entry?.token === inspectorHistoryToken ? entry : null;
+}
+
+function writeInspectorHistory() {
+  const state = { ...history.state, recipeInspector: { token: inspectorHistoryToken, id: viewingId, identity: inspectorIdentity } };
+  if (inspectorHistoryEntry()) history.replaceState(state, '');
+  else history.pushState(state, '');
+}
+
+function openView(id, { focusHeading = false, fromHistory = false } = {}) {
+  const recipe = recipes.find((item) => sameId(item.id, id));
+  if (!recipe) return;
+  const identity = recipeIdentity(recipe);
+  const changed = inspectorIdentity !== identity;
+  const wasClosed = viewingId === null;
+  const scroll = recipeGrid.scrollTop;
+  viewingId = id;
+  inspectorIdentity = identity;
+  if (changed) {
+    prefs = recordView(id, prefs);
+    inspectorActions.open = false;
+    renderInspector(recipe);
+  }
+  inspector.hidden = false;
+  if (compactInspector.matches) {
+    if (wasClosed) compactGridScroll = scroll;
+    libraryBrowser.inert = true;
+    if (!fromHistory) writeInspectorHistory();
+  } else {
+    recipeGrid.scrollTop = scroll;
+    if (!fromHistory && inspectorHistoryEntry()) writeInspectorHistory();
+  }
+  updateSelectedCard();
+  if (changed) inspectorBody.scrollTop = 0;
+  if (focusHeading || compactInspector.matches) document.getElementById('v-name').focus({ preventScroll: true });
+}
+
+function closeInspector({ restoreFocus = true, fromHistory = false } = {}) {
+  if (viewingId === null) return;
+  const card = selectedCard();
+  const scroll = libraryBrowser.inert ? compactGridScroll : recipeGrid.scrollTop;
+  viewingId = null;
+  inspectorIdentity = null;
+  inspector.hidden = true;
+  inspectorBody.replaceChildren();
+  document.getElementById('v-name').textContent = '';
+  document.getElementById('v-sub').replaceChildren();
+  document.getElementById('cookViewLink').href = './kitchen.html';
+  inspectorActions.open = false;
+  libraryBrowser.inert = false;
+  updateSelectedCard();
+  recipeGrid.scrollTop = scroll;
+  if (restoreFocus) {
+    const cardBox = card?.getBoundingClientRect();
+    const gridBox = recipeGrid.getBoundingClientRect();
+    const cardInView = cardBox && cardBox.bottom > gridBox.top && cardBox.top < gridBox.bottom;
+    (cardInView ? card : document.getElementById('searchInput')).focus({ preventScroll: true });
+  }
+  if (!fromHistory && inspectorHistoryEntry()) history.back();
+}
+
+function refreshInspector() {
+  if (viewingId === null) return;
+  const recipe = recipes.find((item) => sameId(item.id, viewingId));
+  if (!recipe || recipeIdentity(recipe) !== inspectorIdentity) {
+    closeInspector();
+    return;
+  }
+  const scroll = inspectorBody.scrollTop;
+  renderInspector(recipe);
+  inspectorBody.scrollTop = scroll;
+}
+
+compactInspector.addEventListener('change', ({ matches }) => {
+  if (viewingId === null) return;
+  if (matches) {
+    compactGridScroll = recipeGrid.scrollTop;
+    libraryBrowser.inert = true;
+    writeInspectorHistory();
+    if (libraryBrowser.contains(document.activeElement)) document.getElementById('v-name').focus();
+  } else {
+    libraryBrowser.inert = false;
+    recipeGrid.scrollTop = compactGridScroll;
+  }
+});
+
+window.addEventListener('popstate', () => {
+  const entry = inspectorHistoryEntry();
+  const recipe = entry && recipes.find((item) => sameId(item.id, entry.id));
+  if (recipe && entry.identity === recipeIdentity(recipe)) {
+    openView(entry.id, { fromHistory: true });
+  } else {
+    closeInspector({ fromHistory: true });
+  }
+});
+
+function renderInspector(r) {
   const cookLink = document.getElementById('cookViewLink');
   cookLink.hidden = readerMode || !r.ingredients?.trim() || !r.instructions?.trim();
   cookLink.href = './kitchen.html#' + new URLSearchParams({ cook: String(r.id) });
-  prefs = recordView(id, prefs);
+  inspectorActions.hidden = readerMode;
   document.getElementById('v-name').textContent=r.name;
-  document.getElementById('v-sub').innerHTML=`${escapeHtml(r.cuisine||'')}${r.source?' · '+escapeHtml(r.source):''}${r.location?' · '+escapeHtml(r.location):''}&nbsp;&nbsp;${stars(r.rating||0)}`;
-  const ingHtml=(r.ingredients||'').split(/\n/).filter(Boolean).map(i=>`<li>${escapeHtml(tidyIngredientLine(i.trim()))}</li>`).join('');
+  const subtitle = [r.cuisine, r.source, r.location].filter(Boolean).map(escapeHtml).join(' · ');
+  document.getElementById('v-sub').innerHTML = [subtitle, r.rating ? stars(r.rating) : ''].filter(Boolean).join(' · ');
+  const ingHtml=(r.ingredients||'').split(/\n/).map((line) => line.trim()).filter(Boolean).map(i=>`<li>${escapeHtml(tidyIngredientLine(i))}</li>`).join('');
   const linkUrl=safeUrl(r.url);
-  document.getElementById('viewBody').innerHTML=`
+  inspectorBody.innerHTML=`
     ${(r.date||r.preptime||r.cooktime||r.servings)?`
     <div style="display:flex;gap:20px;flex-wrap:wrap;margin-bottom:16px;">
       ${r.date?`<div class="view-field" style="margin:0"><div class="view-label">Date Tried</div><div class="view-val">${escapeHtml(r.date)}</div></div>`:''}
@@ -2268,40 +2405,75 @@ function openView(id) {
       ${r.cooktime?`<div class="view-field" style="margin:0"><div class="view-label">Cook</div><div class="view-val">${escapeHtml(r.cooktime)}</div></div>`:''}
       ${r.servings?`<div class="view-field" style="margin:0"><div class="view-label">Serves</div><div class="view-val">${escapeHtml(r.servings)}</div></div>`:''}
     </div>`:''}
-    ${r.notes?`<div class="view-field"><div class="view-label">Our Story</div><div class="view-val" style="font-family:'Playfair Display',serif;font-style:italic;">${escapeHtml(r.notes)}</div></div>`:''}
-    <hr class="view-divider">
-    ${r.ingredients?`<div class="view-field"><div class="view-label">Ingredients</div><ul class="ing-list">${ingHtml}</ul></div>`:''}
-    ${r.instructions?`<div class="view-field" style="margin-top:16px;"><div class="view-label">Method</div><div class="method-text">${escapeHtml(r.instructions)}</div></div>`:''}
+    <section class="view-field"><h3 class="view-label">Ingredients</h3>
+      ${ingHtml ? `<ul class="ing-list">${ingHtml}</ul>` : '<p class="view-val">No ingredients saved.</p>'}
+    </section>
+    <section class="view-field"><h3 class="view-label">Method</h3>
+      ${r.instructions?.trim() ? `<div class="method-text">${escapeHtml(r.instructions)}</div>` : '<p class="view-val">No method saved.</p>'}
+    </section>
+    ${r.notes ? `<section class="view-field"><h3 class="view-label">Our Story</h3><div class="view-val inspector-notes">${escapeHtml(r.notes)}</div></section>` : ''}
     ${(r.tags || []).length ? `<hr class="view-divider"><div class="view-tags">${getRecipeTagLabels(r.tags, tagRegistry).map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join('')}</div>` : ''}
     ${linkUrl?`<hr class="view-divider"><div class="view-field"><div class="view-label">Original Source URL</div><div class="view-val"><a href="${escapeHtml(linkUrl)}" target="_blank" rel="noopener noreferrer">🔗 ${escapeHtml(linkUrl)}</a></div></div>`:''}
   `;
-  openModal('viewModal');
 }
-document.getElementById('closeViewBtn').addEventListener('click',()=>closeModal('viewModal'));
-document.getElementById('closeView2Btn').addEventListener('click',()=>closeModal('viewModal'));
+document.getElementById('closeViewBtn').addEventListener('click', () => closeInspector());
+document.getElementById('backToRecipesBtn').addEventListener('click', () => closeInspector());
 document.getElementById('printViewBtn').addEventListener('click', () => window.print());
-document.getElementById('editViewBtn').addEventListener('click',()=>openEdit(viewingId));
-document.getElementById('deleteViewBtn').addEventListener('click',()=>{ del(viewingId); closeModal('viewModal'); });
+document.getElementById('editViewBtn').addEventListener('click', () => {
+  inspectorActions.open = false;
+  inspectorActions.querySelector('summary').focus();
+  openEdit(viewingId);
+});
+document.getElementById('deleteViewBtn').addEventListener('click', () => {
+  inspectorActions.open = false;
+  inspectorActions.querySelector('summary').focus();
+  requestDelete(viewingId);
+});
+
+function requestDelete(id) {
+  if (readerMode || deletingRecipe) return;
+  if (!REMOTE_MODE) {
+    del(id);
+    return;
+  }
+  const recipe = recipes.find((item) => sameId(item.id, id));
+  if (!recipe) return;
+  pendingRecipeDelete = recipe;
+  document.getElementById('deleteRecipeMessage').textContent = `Remove “${recipe.name}” from the family library?`;
+  openModal('deleteRecipeModal');
+}
+
+document.getElementById('cancelRecipeDelete').addEventListener('click', () => closeModal('deleteRecipeModal'));
+document.getElementById('confirmRecipeDelete').addEventListener('click', async () => {
+  if (readerMode || deletingRecipe || !pendingRecipeDelete) return;
+  const recipe = pendingRecipeDelete;
+  const buttons = document.querySelectorAll('#deleteRecipeModal button');
+  deletingRecipe = true;
+  buttons.forEach((button) => { button.disabled = true; });
+  try {
+    const result = await deleteRemoteRecipe({ api: remoteApi, recipe });
+    recipes = recipes.filter((item) => !sameId(item.id, recipe.id));
+    deletingRecipe = false;
+    closeModal('deleteRecipeModal');
+    prefs = recordEdit(prefs);
+    persist();
+    render();
+    showToast(result?.offline ? 'Offline. Changes saved locally.' : `"${recipe.name}" deleted`);
+  } catch (error) {
+    deletingRecipe = false;
+    closeModal('deleteRecipeModal');
+    console.error('remote delete failed:', error);
+    handleRemoteAuthFailure(error, 'Access expired or changed. Re-enter the family access code before deleting.');
+    showToast(`⚠️ Delete failed: ${error.message || 'server error'}`, 'error');
+  } finally {
+    buttons.forEach((button) => { button.disabled = false; });
+  }
+});
 
 function del(id) {
   const idx = recipes.findIndex(x=>sameId(x.id, id));
   if (idx === -1) return;
   const removed = recipes[idx];
-  if (REMOTE_MODE) {
-    deleteRemoteRecipe({ api: remoteApi, recipe: removed })
-      .then((result) => {
-        recipes.splice(idx, 1);
-        prefs = recordEdit(prefs);
-        persist(); render();
-        showToast(result?.offline ? 'Offline. Changes saved locally.' : `"${removed.name}" deleted`);
-      })
-      .catch((error) => {
-        console.error('remote delete failed:', error);
-        handleRemoteAuthFailure(error, 'Access expired or changed. Re-enter the family access code before deleting.');
-        showToast(`⚠️ Delete failed: ${error.message || 'server error'}`, 'error');
-      });
-    return;
-  }
   // Animate the card out before removing from data
   const cardEl = document.querySelector(`.card[data-id="${CSS.escape(String(id))}"]`);
   const doRemove = () => {
@@ -2344,11 +2516,12 @@ function openModal(id) {
   if (firstFocusable) setTimeout(() => firstFocusable.focus(), 50);
 }
 function closeModal(id) {
+  if (id === 'deleteRecipeModal') {
+    if (deletingRecipe) return;
+    pendingRecipeDelete = null;
+  }
   const el = document.getElementById(id);
   el.classList.remove('open');
-  if (id === 'viewModal') {
-    document.getElementById('recipeGrid').scrollTop = scrollBeforeModal;
-  }
   // Restore focus to whatever opened the modal.
   if (lastFocusedBeforeModal && document.contains(lastFocusedBeforeModal)) {
     try { lastFocusedBeforeModal.focus({ preventScroll: true }); }
@@ -2368,6 +2541,10 @@ document.addEventListener('keydown',e=>{
   }
   const openOverlay = document.querySelector('.modal-overlay.open');
   if (openOverlay) closeModal(openOverlay.id);
+  else if (inspectorActions.open) {
+    inspectorActions.open = false;
+    inspectorActions.querySelector('summary').focus();
+  } else closeInspector();
 });
 
 // Focus trap for any .modal-overlay.open

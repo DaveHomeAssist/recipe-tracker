@@ -53,10 +53,10 @@ for (const viewport of [{ width: 375, height: 812 }, { width: 1440, height: 900 
     });
     expect(await fit()).toBe(true);
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
-    const recipeDialog = page.locator('#viewModal .modal');
+    const inspector = page.locator('#recipeInspector');
     await card.click();
-    await expectReadableRecipeDetail(recipeDialog);
-    await page.getByRole('button', { name: 'Close recipe', exact: true }).click();
+    await expectReadableRecipeDetail(inspector);
+    await page.getByRole('button', { name: /Close recipe|Back to recipes/ }).click();
 
     await page.getByRole('button', { name: 'Dark mode' }).click();
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
@@ -64,10 +64,12 @@ for (const viewport of [{ width: 375, height: 812 }, { width: 1440, height: 900 
     await expect(card).toBeVisible();
     await card.click();
     await expect(page.getByRole('button', { name: 'Print recipe' })).toBeVisible();
-    await expectReadableRecipeDetail(recipeDialog);
+    await expectReadableRecipeDetail(inspector);
     await page.emulateMedia({ media: 'print' });
-    await expectReadableRecipeDetail(recipeDialog);
-    await expect(page.locator('#main')).toBeHidden();
+    await expectReadableRecipeDetail(inspector);
+    await expect(page.locator('#libraryBrowser')).toBeHidden();
+    await expect(page.locator('.app-masthead')).toBeHidden();
+    await expect(page.getByRole('button', { name: 'Print recipe' })).toBeHidden();
     await expect(page.locator('#viewBody')).toContainText('1 cup flour');
     await expect(page.locator('#viewBody')).toContainText('Bake until golden.');
     await page.emulateMedia({ media: 'screen' });
