@@ -17,7 +17,23 @@ test('public visitors browse without a code, and family sign-in restores editing
     }
   });
 
-  const publicRecipe = { id: 'public-0', name: 'Public gougères', ingredients: '1 cup flour', instructions: 'Bake.' };
+  const sourcePhoto = 'https://images.example.test/gougeres.jpg';
+  const unavailableFamilyPhoto = 'https://family.example.test/unavailable.jpg';
+  const publicRecipe = {
+    id: 'public-0',
+    name: 'Public gougères',
+    url: 'https://recipes.example.test/gougeres',
+    ingredients: '1 cup flour',
+    instructions: 'Bake.',
+  };
+  await page.route('**/build/public/recipes.json', (route) => route.fulfill({ json: [
+    { url: publicRecipe.url, image: sourcePhoto },
+  ] }));
+  await page.route(sourcePhoto, (route) => route.fulfill({
+    contentType: 'image/svg+xml',
+    body: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="16"/>',
+  }));
+  await page.route(unavailableFamilyPhoto, (route) => route.abort());
   await page.route('**/api/v1/public-recipes', async (route) => {
     expect(route.request().headers().authorization).toBeUndefined();
     await route.fulfill({ json: { data: [publicRecipe] } });
@@ -34,7 +50,7 @@ test('public visitors browse without a code, and family sign-in restores editing
   });
   await page.route('**/api/v1/recipes', async (route) => {
     expect(route.request().headers().authorization).toBe('Bearer synthetic-family-session');
-    await route.fulfill({ json: { data: [{ ...publicRecipe, id: 'family-1', notes: 'Private family note' }] } });
+    await route.fulfill({ json: { data: [{ ...publicRecipe, id: 'family-1', notes: 'Private family note', image: unavailableFamilyPhoto }] } });
   });
 
   let deleteRequests = 0;
@@ -53,6 +69,7 @@ test('public visitors browse without a code, and family sign-in restores editing
   await expect(page.getByRole('heading', { name: 'Enter Family Access Code' })).toHaveCount(0);
   const card = page.locator('.recipe-grid .card').filter({ hasText: publicRecipe.name });
   await expect(card).toBeVisible();
+  await expect(card.locator('.card-image img')).toHaveAttribute('src', sourcePhoto);
   await expect(page.getByText('Private cache marker')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Add Recipe', exact: true })).toBeHidden();
   await card.click();
@@ -73,7 +90,15 @@ test('public visitors browse without a code, and family sign-in restores editing
   await expect(page.getByRole('link', { name: 'Kitchen', exact: true })).toBeVisible();
   const signedInCard = page.locator('.recipe-grid .card[data-id="family-1"]');
   await expect(signedInCard).toBeVisible();
+  await expect(signedInCard.locator('.card-image img')).toHaveAttribute('src', sourcePhoto);
   await signedInCard.click();
+  await expect(page.locator('.inspector-photo')).toHaveAttribute('src', sourcePhoto);
+  await expect.poll(() => page.locator('.inspector-photo').evaluate((img) => img.naturalWidth)).toBe(24);
+  const savedPhoto = await page.evaluate(() => {
+    const stored = JSON.parse(localStorage.getItem('recipe_journal_v3'));
+    return stored.recipes.find((recipe) => recipe.id === 'family-1')?.image;
+  });
+  expect(savedPhoto).toBe(unavailableFamilyPhoto);
   await expect(page.locator('#viewBody')).toContainText('Private family note');
   await page.locator('#recipeActions summary').click();
   await expect(page.getByRole('button', { name: 'Edit', exact: true })).toBeVisible();
