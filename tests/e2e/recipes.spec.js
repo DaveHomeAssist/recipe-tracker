@@ -30,15 +30,15 @@ test('loads and renders all 187 seeded cards', async ({ page }) => {
   await expect(page.locator('.stats-bar')).toContainText('187');
 });
 
-test('clicking a card opens the view modal with the recipe name', async ({ page }) => {
+test('clicking a card opens the inspector with the recipe name', async ({ page }) => {
   await freshPage(page);
   await page.locator('.recipe-grid .card').first().waitFor();
 
   const firstTitle = await page.locator('.recipe-grid .card .card-title').first().innerText();
   await page.locator('.recipe-grid .card').first().click();
 
-  const modal = page.locator('#viewModal');
-  await expect(modal).toHaveClass(/open/);
+  const modal = page.locator('#recipeInspector');
+  await expect(modal).toBeVisible();
   await expect(modal.locator('.view-title')).toHaveText(firstTitle);
 });
 
@@ -195,16 +195,15 @@ test('add form pre-fills cuisine, suggestions, and rating defaults from usage', 
   await expect(page.locator('#fStars .star-option.active')).toHaveCount(5);
 });
 
-test('closing the view modal restores the prior scroll position', async ({ page }) => {
+test('closing the inspector restores the prior scroll position', async ({ page }) => {
   await freshPage(page);
   await page.locator('.recipe-grid .card').nth(30).scrollIntoViewIfNeeded();
   const beforeOpen = await page.locator('#recipeGrid').evaluate((grid) => grid.scrollTop);
 
   await page.locator('.recipe-grid .card').nth(30).click();
-  await expect(page.locator('#viewModal')).toHaveClass(/open/);
+  await expect(page.locator('#recipeInspector')).toBeVisible();
   await page.locator('#closeViewBtn').click();
-  await expect(page.locator('#viewModal')).not.toHaveClass(/open/);
-  await page.waitForTimeout(120);
+  await expect(page.locator('#recipeInspector')).toBeHidden();
 
   const afterClose = await page.locator('#recipeGrid').evaluate((grid) => grid.scrollTop);
   expect(Math.abs(afterClose - beforeOpen)).toBeLessThan(5);
@@ -289,10 +288,13 @@ test('editing preserves cuisines outside the default select list', async ({ page
 
   await expect(page.locator('.recipe-grid .card')).toHaveCount(1);
   await page.locator('.recipe-grid .card').first().click();
+  await page.locator('#recipeActions summary').click();
   await page.locator('#editViewBtn').click();
   await expect(page.locator('#f-cuisine')).toHaveValue('British');
+  await page.locator('#f-instructions').fill('Updated method in the same inspector.');
   await page.locator('#saveFormBtn').click();
   await expect(page.locator('#formModal')).not.toHaveClass(/open/);
+  await expect(page.locator('#recipeInspector')).toContainText('Updated method in the same inspector.');
 
   await page.reload();
   await expect(page.locator('.recipe-grid .card .card-cuisine')).toHaveText('British');
@@ -403,7 +405,7 @@ test('import validates recipes before merge and reports dropped invalid rows', a
   await expect(page.locator('.recipe-grid .card .card-stars')).toContainText('★');
 
   await page.locator('.recipe-grid .card').first().click();
-  await expect(page.locator('#viewModal')).toHaveClass(/open/);
+  await expect(page.locator('#recipeInspector')).toBeVisible();
   await expect(page.locator('#v-name')).toHaveText('Imported Rigatoni');
   await expect(page.locator('#viewBody')).not.toContainText('Original Source URL');
   await expect(page.locator('#viewBody')).not.toContainText('javascript:alert(1)');
