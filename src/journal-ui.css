@@ -178,13 +178,28 @@ body.library-page, body.kitchen-page {
   max-width: none;
   margin: 0;
   padding: 12px var(--journal-gutter) 24px;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 245px), 1fr));
+  --recipe-columns: repeat(auto-fill, minmax(min(100%, 245px), 1fr));
+  grid-template-columns: var(--recipe-columns);
   grid-auto-rows: max-content;
   align-content: start;
   overflow: auto;
   overscroll-behavior: contain;
   gap: clamp(10px, 1.5vw, 24px);
   border-top: 1px solid var(--journal-border);
+}
+.thanksgiving-mode .toolbar,
+.thanksgiving-mode .stats-bar,
+.thanksgiving-cards .card-tags { display: none; }
+.thanksgiving-course { grid-column: 1 / -1; }
+.thanksgiving-course h2 {
+  margin: 0 0 10px;
+  font: 700 clamp(1.35rem, 2.5vw, 2rem)/1.2 var(--journal-display);
+  color: var(--journal-ink);
+}
+.thanksgiving-cards {
+  display: grid;
+  grid-template-columns: var(--recipe-columns);
+  gap: clamp(10px, 1.5vw, 24px);
 }
 .library-page .card {
   min-width: 0;
@@ -298,6 +313,10 @@ body.library-page, body.kitchen-page {
     background: var(--journal-surface);
   }
   .app-nav a { flex: 1; max-width: 180px; }
+  .app-nav:has([data-black-friday-nav]:not([hidden])) a {
+    padding-inline: 4px;
+    font-size: .775rem;
+  }
   .library-page #main, .kitchen-page .layout { padding-bottom: calc(52px + var(--journal-bottom)); }
   .library-heading { gap: 4px; }
   .library-heading .stat-chip { gap: 4px; font-size: .75rem; }
@@ -314,7 +333,7 @@ body.library-page, body.kitchen-page {
   .library-page .toolbar-actions > button { flex-shrink: 0; padding: 6px 11px; }
   .library-page .filter-row { grid-template-columns: 52px minmax(0, 1fr); }
   .library-page .filter-btn { min-height: 36px; }
-  .library-page .recipe-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .library-page .recipe-grid { --recipe-columns: repeat(2, minmax(0, 1fr)); }
   .library-page .card-body { padding: 8px; }
   .library-page .card-title { font-size: 1rem; }
   .library-page .card-meta { flex-wrap: wrap; gap: 2px; }
@@ -330,7 +349,7 @@ body.library-page, body.kitchen-page {
   .kitchen-page .cook-overlay { padding-bottom: calc(100px + var(--journal-bottom)); }
 }
 @media (max-width: 360px) {
-  .library-page .recipe-grid { grid-template-columns: 1fr; }
+  .library-page .recipe-grid { --recipe-columns: 1fr; }
 }
 @media (max-height: 530px) and (orientation: landscape) {
   .library-heading { padding-block: 4px; }
