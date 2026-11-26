@@ -25,15 +25,11 @@ function publicCatalogImage(value) {
   }
 }
 
-export async function mergeSeedImages(recipes, options = {}) {
+export async function loadSeedImageLookup(options = {}) {
   const fetchImpl = options.fetchImpl || fetch;
   const source = options.source || './build/public/recipes.json';
   const matchKey = options.publicSources ? publicSourceKey : normalizeUrl;
   const imageUrl = options.publicSources ? publicCatalogImage : safeUrl;
-
-  if (!Array.isArray(recipes) || !recipes.length) {
-    return { recipes: Array.isArray(recipes) ? recipes : [], changed: 0 };
-  }
 
   const response = await fetchImpl(source, { cache: 'no-store' });
   if (!response.ok) {
@@ -55,10 +51,19 @@ export async function mergeSeedImages(recipes, options = {}) {
     }
   }
 
+  return (recipeUrl) => imageByUrl.get(matchKey(recipeUrl)) || '';
+}
+
+export async function mergeSeedImages(recipes, options = {}) {
+  if (!Array.isArray(recipes) || !recipes.length) {
+    return { recipes: Array.isArray(recipes) ? recipes : [], changed: 0 };
+  }
+
+  const lookup = await loadSeedImageLookup(options);
   let changed = 0;
   const nextRecipes = recipes.map((recipe) => {
     if (safeUrl(recipe?.image)) return recipe;
-    const match = imageByUrl.get(matchKey(recipe?.url));
+    const match = lookup(recipe?.url);
     if (!match) return recipe;
     changed += 1;
     return { ...recipe, image: match };

@@ -1,6 +1,10 @@
 // Publisher images confirmed against their original recipe pages.
 export const extraPublicPhotos = [
   {
+    "url": "https://anitalianinmykitchen.com/wprm_print/french-sable-cookies",
+    "image": "https://anitalianinmykitchen.com/wp-content/uploads/2019/12/sable-cookies-pict1-of-1.jpg"
+  },
+  {
     "url": "https://www.allrecipes.com/recipe/17891/golden-sweet-cornbread/",
     "image": "https://www.allrecipes.com/thmb/7wv4rhGxdsyqcx-6oGYh8Kevjuk%3D/0x512/filters%3Ano_upscale%28%29%3Amax_bytes%28150000%29%3Astrip_icc%28%29%3Aformat%28webp%29/17891-golden-sweet-cornbread-PICS-Beauty-3x2-a13fdd72ed6a454e96814fe231cbb722.jpg"
   },
