@@ -1,5 +1,6 @@
 :root {
   color-scheme: light;
+  --library-banner: url("../assets/recipe-library/banner-light.webp");
   --journal-paper: #f6f4ec;
   --journal-surface: #fffdf7;
   --journal-ink: #172f27;
@@ -18,6 +19,7 @@
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
+  --library-banner: url("../assets/recipe-library/banner-dark.webp");
   --journal-paper: #11201b;
   --journal-surface: #192c24;
   --journal-ink: #f2f3e7;
@@ -116,10 +118,18 @@ body.library-page, body.kitchen-page {
 }
 .library-heading {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px 24px;
-  padding: clamp(12px, 3vh, 30px) var(--journal-gutter) 8px;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 8px;
+  margin: 8px var(--journal-gutter) 4px;
+  padding: clamp(14px, 3vh, 32px) clamp(12px, 3vw, 36px);
+  border: 1px solid var(--journal-border);
+  border-radius: 9px;
+  background-color: var(--journal-paper);
+  background-image: linear-gradient(90deg, var(--journal-paper), transparent 64%), var(--library-banner);
+  background-position: center;
+  background-size: cover;
 }
 .library-heading h1, .kitchen-page .page h1 {
   color: var(--journal-ink);
@@ -188,7 +198,16 @@ body.library-page, body.kitchen-page {
   border-color: var(--journal-action);
 }
 .library-page .card-image { aspect-ratio: 16 / 10; background: var(--journal-wash); }
-.library-page .card-image-empty { display: none; }
+.library-page .card-image-empty {
+  background: var(--journal-wash) url("../assets/recipe-library/card-placeholder.webp") center / cover no-repeat;
+}
+.library-page .empty-state:has(.empty-search-art) { padding-block: 16px 24px; }
+.empty-search-art {
+  display: block;
+  width: clamp(78px, 16vh, 126px);
+  height: auto;
+  margin: 0 auto 6px;
+}
 .library-page .card-body { padding: 12px 14px; }
 .library-page .card-title { color: var(--journal-ink); overflow-wrap: anywhere; }
 .library-page .card-notes, .library-page .view-val { color: var(--journal-muted); }
@@ -279,8 +298,9 @@ body.library-page, body.kitchen-page {
   }
   .app-nav a { flex: 1; max-width: 180px; }
   .library-page #main, .kitchen-page .layout { padding-bottom: calc(52px + var(--journal-bottom)); }
-  .library-heading { flex-wrap: wrap; gap: 4px 12px; }
-  .library-heading .stats-bar { font-size: .8rem; }
+  .library-heading { gap: 4px; }
+  .library-heading .stat-chip { gap: 4px; font-size: .75rem; }
+  .library-heading .stat-chip strong { font-size: .9rem; }
   .library-page .toolbar { grid-template-columns: minmax(0, 1fr); }
   .library-page .toolbar-actions {
     grid-column: 1;

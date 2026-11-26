@@ -105,7 +105,7 @@ test('public visitors browse without a code, and family sign-in restores editing
   expect(deleteRequests).toBe(2);
 });
 
-test('guest cards show matched source photos and collapse failed images', async ({ page }) => {
+test('guest cards show matched source photos and use placeholders for missing or failed images', async ({ page }) => {
   await page.addInitScript(() => {
     window.RECIPE_TRACKER_CONFIG = { PUBLIC_READER: true, USE_REMOTE_BACKEND: true };
   });
@@ -132,8 +132,10 @@ test('guest cards show matched source photos and collapse failed images', async 
   await expect(bread).toHaveAttribute('src', goodImage);
   await expect.poll(() => bread.evaluate((image) => image.naturalWidth)).toBeGreaterThan(0);
 
-  const soup = page.locator('.card[data-id="soup"]');
-  await expect(soup.locator('.card-image')).toHaveAttribute('hidden', '');
-  await expect(soup.locator('.card-image')).toBeHidden();
-  await expect(page.locator('.card[data-id="salad"] img')).toHaveCount(0);
+  for (const id of ['soup', 'salad']) {
+    const placeholder = page.locator(`.card[data-id="${id}"] .card-image-empty`);
+    await expect(placeholder).toBeVisible();
+    await expect(placeholder).toHaveCSS('background-image', /card-placeholder\.webp/);
+    await expect(placeholder.locator('img')).toHaveCount(0);
+  }
 });

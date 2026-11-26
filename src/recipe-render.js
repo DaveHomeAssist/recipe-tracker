@@ -97,7 +97,10 @@ export const renderCardHtml = (r, indexOrOptions = 0, maybeOptions = {}) => {
 export const renderGridHtml = (recipes, opts = {}) => {
   const list = filtered(recipes, opts);
   if (!list.length) {
-    return `<div class="empty-state"><div class="ei">🍽️</div><p>No recipes match. Try changing your search or filters.</p></div>`;
+    const emptyArt = normalizeFilters(opts).search.trim()
+      ? '<img class="empty-search-art" src="./assets/recipe-library/no-search-results.webp" width="360" height="360" alt="">'
+      : '<div class="ei" aria-hidden="true">🍽️</div>';
+    return `<div class="empty-state">${emptyArt}<p>No recipes match. Try changing your search or filters.</p></div>`;
   }
   return list.map((r, i) => renderCardHtml(r, { index: i, tagRegistry: opts.tagRegistry || {} })).join('');
 };

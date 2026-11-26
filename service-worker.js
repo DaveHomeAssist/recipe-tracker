@@ -1,4 +1,4 @@
-const CACHE_VERSION = '2026-11-26-6';
+const CACHE_VERSION = '2026-11-26-7';
 const CACHE_NAME = `recipe-journal-${CACHE_VERSION}`;
 const APP_SHELL = [
   './',
@@ -7,6 +7,10 @@ const APP_SHELL = [
   './src/journal-theme.js',
   './manifest.webmanifest',
   './favicon.svg',
+  './assets/recipe-library/banner-light.webp',
+  './assets/recipe-library/banner-dark.webp',
+  './assets/recipe-library/card-placeholder.webp',
+  './assets/recipe-library/no-search-results.webp',
   './src/recipe-lib.js',
   './src/recipe-render.js',
   './src/recipe-schema.js',
