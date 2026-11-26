@@ -402,9 +402,15 @@
 
 <main id="main" tabindex="-1">
 <div class="library-browser" id="libraryBrowser">
+<div class="library-opening">
 <div class="library-heading">
   <h1 id="libraryTitle">Recipe library</h1>
   <div class="stats-bar" id="statsBar" aria-live="polite"></div>
+</div>
+<a class="library-collection-link" href="./index.html?collection=thanksgiving">
+  <span>Thanksgiving menu</span>
+  <small>Browse recipes by course →</small>
+</a>
 </div>
 <div class="toolbar" role="toolbar" aria-label="Recipe toolbar">
   <div class="search-wrap">
@@ -615,15 +621,16 @@ const APP_CONFIG = Object.freeze({
   ...(globalThis.RECIPE_TRACKER_CONFIG || {}),
 });
 const REMOTE_MODE = Boolean(APP_CONFIG.USE_REMOTE_BACKEND || APP_CONFIG.syncMode === 'remote');
+const EMBEDDED_READER = REMOTE_MODE && window.top !== window;
 const remoteApi = REMOTE_MODE
   ? createRecipeApi({
       baseUrl: APP_CONFIG.apiBaseUrl || '/api',
-      getSessionToken: getStoredSessionToken,
-      onUnauthorized: clearStoredCredentials,
+      getSessionToken: EMBEDDED_READER ? () => '' : getStoredSessionToken,
+      onUnauthorized: EMBEDDED_READER ? undefined : clearStoredCredentials,
     })
   : null;
-const PUBLIC_READER = REMOTE_MODE && Boolean(APP_CONFIG.PUBLIC_READER);
-let readerMode = PUBLIC_READER && !getStoredSessionToken();
+const PUBLIC_READER = REMOTE_MODE && Boolean(APP_CONFIG.PUBLIC_READER || EMBEDDED_READER);
+let readerMode = EMBEDDED_READER || (PUBLIC_READER && !getStoredSessionToken());
 let prefs = loadPrefs();
 
 const cloneFilters = (value = DEFAULT_FILTERS) => ({
@@ -753,8 +760,8 @@ function loadLocalState() {
   }
 }
 
-const initialLocalState = loadLocalState();
-const initialRemoteCache = REMOTE_MODE ? loadRemoteRecipeCache() : { recipes: [], tagRegistry: {} };
+const initialLocalState = EMBEDDED_READER ? null : loadLocalState();
+const initialRemoteCache = REMOTE_MODE && !EMBEDDED_READER ? loadRemoteRecipeCache() : { recipes: [], tagRegistry: {} };
 const initialRemoteState = hydrateRecipeState(initialRemoteCache.recipes, initialRemoteCache.tagRegistry);
 const initialDataState = readerMode
   ? { recipes: [], tagRegistry: {}, hasStoredState: false, requiresTagMigration: false }
@@ -1484,7 +1491,7 @@ function maybeShowBackupNudge() {
 
 function render() {
   document.body.classList.toggle('reader-mode', readerMode);
-  document.getElementById('familyEditBtn').hidden = !readerMode;
+  document.getElementById('familyEditBtn').hidden = !readerMode || EMBEDDED_READER;
   renderFilterChips();
   renderLibraryHeading();
   renderStats();
@@ -1625,6 +1632,10 @@ async function loadPublicLibrary() {
 
 async function syncRemoteRecipes({ allowPrompt = true } = {}) {
   if (!REMOTE_MODE) return;
+  if (EMBEDDED_READER) {
+    await loadPublicLibrary();
+    return;
+  }
 
   bootError = '';
   try {
@@ -2797,7 +2808,7 @@ if (!REMOTE_MODE && initialSchemaVersion < SCHEMA_VERSION) {
 }
 if (REMOTE_MODE) {
   document.getElementById('familyEditBtn').addEventListener('click', () => {
-    openAuthModal('Enter the family access code to edit recipes and use Kitchen.');
+    if (!EMBEDDED_READER) openAuthModal('Enter the family access code to edit recipes and use Kitchen.');
   });
   document.getElementById('syncToNotionBtn').hidden = false;
   syncRemoteRecipes();
@@ -2805,7 +2816,7 @@ if (REMOTE_MODE) {
     syncRemoteRecipes({ allowPrompt: false });
   });
 }
-registerServiceWorker();
+if (!EMBEDDED_READER) registerServiceWorker();
 </script>
 </body>
 </html>

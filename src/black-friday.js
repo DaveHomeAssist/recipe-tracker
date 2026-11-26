@@ -6,6 +6,13 @@
   const deadline = document.getElementById('black-friday-deadline');
   let expirationTimer;
 
+  if (deals && window.top !== window) {
+    for (const retailer of deals.querySelectorAll('.deal-link')) {
+      retailer.target = '_blank';
+      retailer.rel = 'noopener noreferrer';
+    }
+  }
+
   if (deadline) {
     deadline.dateTime = closesAt.toISOString();
     deadline.textContent = new Intl.DateTimeFormat('en-US', {

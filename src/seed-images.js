@@ -1,4 +1,5 @@
 import { safeUrl } from './recipe-lib.js';
+import { extraPublicPhotos } from './public-recipe-photos.js';
 
 const normalizeUrl = (value) => safeUrl(value).trim().toLowerCase();
 
@@ -42,7 +43,8 @@ export async function mergeSeedImages(recipes, options = {}) {
   const seededRecipes = await response.json();
   const imageByUrl = new Map();
 
-  for (const recipe of seededRecipes) {
+  const catalog = options.publicSources ? [...seededRecipes, ...extraPublicPhotos] : seededRecipes;
+  for (const recipe of catalog) {
     const key = matchKey(recipe?.url);
     const image = imageUrl(recipe?.image);
     if (!key || !image) continue;
