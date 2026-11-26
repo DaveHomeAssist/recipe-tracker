@@ -62,8 +62,8 @@ const resolveCardOptions = (indexOrOptions = 0, maybeOptions = {}) =>
     : { index: 0, ...(indexOrOptions || {}) };
 
 export const renderCardHtml = (r, indexOrOptions = 0, maybeOptions = {}) => {
-  const { index, tagRegistry = {} } = resolveCardOptions(indexOrOptions, maybeOptions);
-  const imageUrl = safeUrl(r.image);
+  const { index, tagRegistry = {}, compact = false } = resolveCardOptions(indexOrOptions, maybeOptions);
+  const imageUrl = compact ? null : safeUrl(r.image);
   const cardImage = imageUrl
     ? `<div class="card-image"><img src="${escapeHtml(imageUrl)}" loading="lazy" decoding="async" referrerpolicy="no-referrer" alt=""></div>`
     : `<div class="card-image card-image-empty" aria-hidden="true"></div>`;
@@ -71,13 +71,13 @@ export const renderCardHtml = (r, indexOrOptions = 0, maybeOptions = {}) => {
 
   return `
   <div class="card" style="animation-delay:${index * 0.045}s" data-id="${escapeHtml(r.id)}">
-    ${cardImage}
+    ${compact ? '' : cardImage}
     <div class="card-body">
       <div class="card-banner ${cClass(r.cuisine)}"></div>
       <div class="card-meta"><span class="card-cuisine">${escapeHtml(r.cuisine || '')}</span><span class="card-stars">${stars(r.rating || 0)}</span></div>
       <div class="card-title">${escapeHtml(r.name)}</div>
       ${r.location ? `<div class="card-origin">${escapeHtml(r.location)}</div>` : ''}
-      ${r.notes ? `<div class="card-notes">${escapeHtml(r.notes)}</div>` : ''}
+      ${!compact && r.notes ? `<div class="card-notes">${escapeHtml(r.notes)}</div>` : ''}
       ${r.url ? `<div class="card-link">🔗 ${escapeHtml(r.url)}</div>` : ''}
     </div>
     <div class="card-footer">
@@ -102,7 +102,16 @@ export const renderGridHtml = (recipes, opts = {}) => {
       : '<div class="ei" aria-hidden="true">🍽️</div>';
     return `<div class="empty-state">${emptyArt}<p>No recipes match. Try changing your search or filters.</p></div>`;
   }
-  return list.map((r, i) => renderCardHtml(r, { index: i, tagRegistry: opts.tagRegistry || {} })).join('');
+  if (opts.sort === 'name-asc' || opts.sort === 'name-desc') {
+    const direction = opts.sort === 'name-asc' ? 1 : -1;
+    const byName = new Intl.Collator('en', { sensitivity: 'base', numeric: true });
+    list.sort((a, b) => direction * byName.compare(a.name, b.name));
+  }
+  return list.map((r, i) => renderCardHtml(r, {
+    index: i,
+    tagRegistry: opts.tagRegistry,
+    compact: opts.compact,
+  })).join('');
 };
 
 export const statsFor = (recipes) => ({

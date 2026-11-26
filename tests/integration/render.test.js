@@ -308,3 +308,22 @@ describe('statsFor', () => {
     expect(s.cuisines).toBe(2);
   });
 });
+
+it('sorts filtered recipes by name while preserving input and tie order', () => {
+  const recipe = { ...sampleRecipes[0], tags: 'pasta', name: 'Pasta 2' };
+  const recipes = [
+    { ...recipe, id: 1, name: 'Pasta 10' },
+    { ...recipe, id: 2 },
+    { ...recipe, id: 3, name: 'Pásta 2' },
+    { ...recipe, id: 4, cuisine: 'French' },
+    { ...recipe, id: 5, tags: 'soup' },
+  ];
+  const filters = { cuisine: 'Italian', tags: ['pasta'], search: 'pasta' };
+  const ids = (sort) => [...renderGridHtml(recipes, { filters, sort })
+    .matchAll(/class="card"[^>]* data-id="(\d+)"/g)].map((match) => Number(match[1]));
+
+  expect(ids('name-asc')).toEqual([2, 3, 1]);
+  expect(ids('name-desc')).toEqual([1, 2, 3]);
+  expect(ids('default')).toEqual([1, 2, 3]);
+  expect(recipes.map(({ id }) => id)).toEqual([1, 2, 3, 4, 5]);
+});
