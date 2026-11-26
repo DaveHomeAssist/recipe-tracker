@@ -1,4 +1,4 @@
-const CACHE_VERSION = '2026-11-26-9';
+const CACHE_VERSION = '2026-11-26-10';
 const CACHE_NAME = `recipe-journal-${CACHE_VERSION}`;
 const APP_SHELL = [
   './',
@@ -20,6 +20,7 @@ const APP_SHELL = [
   './src/thanksgiving.js',
   './src/recipe-schema.js',
   './src/seed-images.js',
+  './src/public-recipe-photos.js',
   './build/public/recipes.json',
 ];
 

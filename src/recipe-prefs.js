@@ -19,6 +19,7 @@ const DEFAULTS = {
 };
 
 const getStorage = () =>
+  (!globalThis.window || globalThis.window.top === globalThis.window) &&
   globalThis.localStorage &&
   typeof globalThis.localStorage.getItem === 'function' &&
   typeof globalThis.localStorage.setItem === 'function'

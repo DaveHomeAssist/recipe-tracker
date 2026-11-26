@@ -55,6 +55,7 @@ for (const viewport of [{ width: 375, height: 812 }, { width: 1440, height: 900 
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
     const banner = page.locator('.library-heading');
     await expect(banner).toHaveCSS('background-image', /banner-light\.webp/);
+    await expect(page.getByRole('link', { name: /Thanksgiving menu/ })).toBeVisible();
     const inspector = page.locator('#recipeInspector');
     await card.click();
     await expectReadableRecipeDetail(inspector);

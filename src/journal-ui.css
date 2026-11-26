@@ -117,13 +117,43 @@ body.library-page, body.kitchen-page {
   width: 100%;
   max-width: none;
 }
+.library-opening {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(11rem, 24%);
+  gap: 10px;
+  margin: 8px var(--journal-gutter) 4px;
+}
+.library-opening:has(.library-heading[data-cuisine]),
+.thanksgiving-mode .library-opening { grid-template-columns: minmax(0, 1fr); }
+.library-opening:has(.library-heading[data-cuisine]) .library-collection-link,
+.thanksgiving-mode .library-collection-link { display: none; }
+.library-collection-link {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  min-height: 44px;
+  padding: 10px 14px;
+  border: 1px solid var(--journal-border);
+  border-radius: 9px;
+  background: var(--journal-wash);
+  color: var(--journal-ink);
+  text-decoration: none;
+}
+.library-collection-link:hover { border-color: var(--journal-action); }
+.library-collection-link span { font: 700 1.2rem/1.2 var(--journal-display); }
+.library-collection-link small { color: var(--journal-muted); }
+.library-page #main:has(.recipe-inspector:not([hidden])) .library-opening {
+  grid-template-columns: minmax(0, 1fr);
+}
+.library-page #main:has(.recipe-inspector:not([hidden])) .library-collection-link { display: none; }
 .library-heading {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   justify-content: center;
   gap: 8px;
-  margin: 8px var(--journal-gutter) 4px;
+  margin: 0;
   padding: clamp(14px, 3vh, 32px) clamp(12px, 3vw, 36px);
   border: 1px solid var(--journal-border);
   border-radius: 9px;
@@ -318,6 +348,9 @@ body.library-page, body.kitchen-page {
     font-size: .775rem;
   }
   .library-page #main, .kitchen-page .layout { padding-bottom: calc(52px + var(--journal-bottom)); }
+  .library-opening { grid-template-columns: minmax(0, 1fr); gap: 5px; }
+  .library-collection-link { flex-direction: row; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 2px 10px; }
+  .library-collection-link span { font-size: 1.05rem; }
   .library-heading { gap: 4px; }
   .library-heading .stat-chip { gap: 4px; font-size: .75rem; }
   .library-heading .stat-chip strong { font-size: .9rem; }
