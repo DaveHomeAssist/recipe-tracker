@@ -83,6 +83,7 @@ body.library-page, body.kitchen-page {
   text-decoration: none;
 }
 .app-nav { display: flex; gap: 4px; }
+.app-nav [data-black-friday-nav][hidden] { display: none; }
 .app-nav a, .theme-toggle {
   min-height: 44px;
   display: inline-flex;

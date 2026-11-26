@@ -1,8 +1,11 @@
-const CACHE_VERSION = '2026-11-26-7';
+const CACHE_VERSION = '2026-11-26-8';
 const CACHE_NAME = `recipe-journal-${CACHE_VERSION}`;
 const APP_SHELL = [
   './',
   './index.html',
+  './black-friday.html',
+  './src/black-friday.js',
+  './src/black-friday.css',
   './src/journal-ui.css',
   './src/journal-theme.js',
   './manifest.webmanifest',
