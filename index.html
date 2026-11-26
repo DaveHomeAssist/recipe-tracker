@@ -785,6 +785,7 @@ let swReloaded = false;
 let shouldReloadForUpdate = false;
 let bootError = '';
 const compactInspector = matchMedia('(max-width: 959px)');
+const scrollableLibrary = matchMedia('(max-width: 760px), (max-width: 959px) and (max-height: 530px)');
 const inspector = document.getElementById('recipeInspector');
 const inspectorBody = document.getElementById('viewBody');
 const inspectorActions = document.getElementById('recipeActions');
@@ -2342,13 +2343,17 @@ function writeInspectorHistory() {
   else history.pushState(state, '');
 }
 
+function recipeScroller() {
+  return scrollableLibrary.matches ? libraryBrowser : recipeGrid;
+}
+
 function openView(id, { focusHeading = false, fromHistory = false } = {}) {
   const recipe = recipes.find((item) => sameId(item.id, id));
   if (!recipe) return;
   const identity = recipeIdentity(recipe);
   const changed = inspectorIdentity !== identity;
   const wasClosed = viewingId === null;
-  const scroll = recipeGrid.scrollTop;
+  const scroll = recipeScroller().scrollTop;
   viewingId = id;
   inspectorIdentity = identity;
   if (changed) {
@@ -2362,7 +2367,7 @@ function openView(id, { focusHeading = false, fromHistory = false } = {}) {
     libraryBrowser.inert = true;
     if (!fromHistory) writeInspectorHistory();
   } else {
-    recipeGrid.scrollTop = scroll;
+    recipeScroller().scrollTop = scroll;
     if (!fromHistory && inspectorHistoryEntry()) writeInspectorHistory();
   }
   updateSelectedCard();
@@ -2373,7 +2378,7 @@ function openView(id, { focusHeading = false, fromHistory = false } = {}) {
 function closeInspector({ restoreFocus = true, fromHistory = false } = {}) {
   if (viewingId === null) return;
   const card = selectedCard();
-  const scroll = libraryBrowser.inert ? compactGridScroll : recipeGrid.scrollTop;
+  const scroll = libraryBrowser.inert ? compactGridScroll : recipeScroller().scrollTop;
   viewingId = null;
   inspectorIdentity = null;
   inspector.hidden = true;
@@ -2384,13 +2389,13 @@ function closeInspector({ restoreFocus = true, fromHistory = false } = {}) {
   inspectorActions.open = false;
   libraryBrowser.inert = false;
   updateSelectedCard();
-  recipeGrid.scrollTop = scroll;
+  recipeScroller().scrollTop = scroll;
   if (restoreFocus) {
     const cardBox = card?.getBoundingClientRect();
-    const gridBox = recipeGrid.getBoundingClientRect();
+    const gridBox = recipeScroller().getBoundingClientRect();
     const cardInView = cardBox && cardBox.bottom > gridBox.top && cardBox.top < gridBox.bottom;
     const fallback = thanksgivingMode ? libraryTitle : document.getElementById('searchInput');
-    (cardInView ? card : fallback).focus({ preventScroll: true });
+    (cardInView ? card : fallback).focus({ preventScroll: Boolean(cardInView) || !scrollableLibrary.matches });
   }
   if (!fromHistory && inspectorHistoryEntry()) history.back();
 }
@@ -2410,13 +2415,13 @@ function refreshInspector() {
 compactInspector.addEventListener('change', ({ matches }) => {
   if (viewingId === null) return;
   if (matches) {
-    compactGridScroll = recipeGrid.scrollTop;
+    compactGridScroll = recipeScroller().scrollTop;
     libraryBrowser.inert = true;
     writeInspectorHistory();
     if (libraryBrowser.contains(document.activeElement)) document.getElementById('v-name').focus();
   } else {
     libraryBrowser.inert = false;
-    recipeGrid.scrollTop = compactGridScroll;
+    recipeScroller().scrollTop = compactGridScroll;
   }
 });
 
