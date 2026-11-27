@@ -14,6 +14,9 @@ const DEFAULTS = {
   editsSinceLastExport: 0,
   lastNudgeDismissedAt: 0,
   recentlyViewed: [],
+  lastView: null,
+  libraryScroll: 0,
+  dismissedContinueUntil: 0,
   recentManualRatings: [],
   v: 1,
 };
@@ -69,6 +72,11 @@ export const loadPrefs = () => {
       filters: normalizeFilters(parsed?.filters, fallbackFilters),
       recentSearches: normalizeStringList(parsed?.recentSearches, 5),
       recentlyViewed: normalizeStringList(parsed?.recentlyViewed, 5),
+      lastView: parsed?.lastView && typeof parsed.lastView === 'object'
+        ? { id: String(parsed.lastView.id || ''), openedAt: Number(parsed.lastView.openedAt || 0) }
+        : null,
+      libraryScroll: Math.max(0, Number(parsed?.libraryScroll || 0)),
+      dismissedContinueUntil: Math.max(0, Number(parsed?.dismissedContinueUntil || 0)),
       recentManualRatings: Array.isArray(parsed?.recentManualRatings)
         ? parsed.recentManualRatings
             .map((value) => Number(value))
@@ -90,6 +98,11 @@ export const savePrefs = (prefs) => {
     filters: normalizeFilters(prefs?.filters),
     recentSearches: normalizeStringList(prefs?.recentSearches, 5),
     recentlyViewed: normalizeStringList(prefs?.recentlyViewed, 5),
+    lastView: prefs?.lastView && typeof prefs.lastView === 'object'
+      ? { id: String(prefs.lastView.id || ''), openedAt: Number(prefs.lastView.openedAt || 0) }
+      : null,
+    libraryScroll: Math.max(0, Number(prefs?.libraryScroll || 0)),
+    dismissedContinueUntil: Math.max(0, Number(prefs?.dismissedContinueUntil || 0)),
     recentManualRatings: Array.isArray(prefs?.recentManualRatings)
       ? prefs.recentManualRatings
           .map((value) => Number(value))
@@ -154,11 +167,26 @@ export const recordEdit = (prefs = loadPrefs()) =>
 export const recordExport = (prefs = loadPrefs()) =>
   savePrefs({ ...prefs, editsSinceLastExport: 0, lastNudgeDismissedAt: 0 });
 
-export const recordView = (id, prefs = loadPrefs()) => {
+export const recordView = (id, prefs = loadPrefs(), openedAt = Date.now()) => {
   const value = String(id || '').trim();
   if (!value) return prefs;
   return savePrefs({
     ...prefs,
     recentlyViewed: [value, ...prefs.recentlyViewed.filter((item) => item !== value)].slice(0, 5),
+    lastView: { id: value, openedAt: Number(openedAt) || Date.now() },
+    dismissedContinueUntil: 0,
   });
+};
+
+export const recordLibraryScroll = (scrollTop, prefs = loadPrefs()) =>
+  savePrefs({ ...prefs, libraryScroll: Math.max(0, Math.round(Number(scrollTop) || 0)) });
+
+export const dismissContinue = (prefs = loadPrefs(), now = Date.now()) =>
+  savePrefs({ ...prefs, dismissedContinueUntil: Number(now) + (7 * 24 * 60 * 60 * 1000) });
+
+export const continueRecipe = (recipes, prefs = loadPrefs(), now = Date.now()) => {
+  const lastView = prefs?.lastView;
+  if (!lastView?.id || Number(prefs.dismissedContinueUntil || 0) > Number(now)) return null;
+  if (Number(now) - Number(lastView.openedAt || 0) > 7 * 24 * 60 * 60 * 1000) return null;
+  return (recipes || []).find((recipe) => String(recipe?.id) === String(lastView.id)) || null;
 };

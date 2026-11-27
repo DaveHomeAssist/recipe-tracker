@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-11-27
+
+- Added a local, dismissible Continue card for the most recently opened recipe.
+- Added recipe-title suggestions to search while retaining recent searches.
+- Restored the prior library scroll position on the same device.
+- Standardized sub-200 ms press, hover, success and error feedback with reduced-motion support.
+- Kept all anticipation data in the browser with no backend profile or sensitive household data.
+
 All notable user-facing changes to Our Recipe Journal.
 
 ## 2026-08-26 — CI workflow and backup re-enable (audit remediation)
