@@ -20,6 +20,7 @@ const DEFAULTS = {
 
 const getStorage = () =>
   (!globalThis.window || globalThis.window.top === globalThis.window) &&
+  new URLSearchParams(globalThis.location?.search || '').get('embed') !== 'public' &&
   globalThis.localStorage &&
   typeof globalThis.localStorage.getItem === 'function' &&
   typeof globalThis.localStorage.setItem === 'function'

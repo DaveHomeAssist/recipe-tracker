@@ -5,8 +5,10 @@
   const ended = document.getElementById('black-friday-ended');
   const deadline = document.getElementById('black-friday-deadline');
   let expirationTimer;
+  // Keep the deals tab off the public Journal that other sites embed.
+  const embedded = window.top !== window || new URLSearchParams(location.search).get('embed') === 'public';
 
-  if (deals && window.top !== window) {
+  if (deals && embedded) {
     for (const retailer of deals.querySelectorAll('.deal-link')) {
       retailer.target = '_blank';
       retailer.rel = 'noopener noreferrer';
@@ -33,7 +35,7 @@
     const focusInDeals = deals?.contains(activeElement);
     const focusOnTab = Array.from(links).includes(activeElement);
 
-    for (const link of links) link.hidden = !active;
+    for (const link of links) link.hidden = !active || embedded;
     if (deals) deals.hidden = !active;
     if (ended) ended.hidden = active;
     if (!active && focusInDeals) ended.querySelector('h1').focus();

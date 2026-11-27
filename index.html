@@ -621,7 +621,17 @@ const APP_CONFIG = Object.freeze({
   ...(globalThis.RECIPE_TRACKER_CONFIG || {}),
 });
 const REMOTE_MODE = Boolean(APP_CONFIG.USE_REMOTE_BACKEND || APP_CONFIG.syncMode === 'remote');
-const EMBEDDED_READER = REMOTE_MODE && window.top !== window;
+const EMBED_REQUESTED = new URLSearchParams(location.search).get('embed') === 'public';
+// A framed Journal and the public new window link (?embed=public) both run as
+// the anonymous public reader: no stored session, no sign in, no install prompt.
+const EMBEDDED_READER = REMOTE_MODE && (window.top !== window || EMBED_REQUESTED);
+if (EMBED_REQUESTED) {
+  for (const link of document.querySelectorAll('a[href^="./index.html"]')) {
+    const url = new URL(link.getAttribute('href'), location.href);
+    url.searchParams.set('embed', 'public');
+    link.setAttribute('href', `./index.html${url.search}`);
+  }
+}
 const remoteApi = REMOTE_MODE
   ? createRecipeApi({
       baseUrl: APP_CONFIG.apiBaseUrl || '/api',

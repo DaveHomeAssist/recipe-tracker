@@ -52,3 +52,37 @@ test('embedded Journal loads only public recipes even with family credentials an
   await expect(reader.locator('#recipeActions')).toBeHidden();
   expect(requests).toEqual(['/api/v1/public-recipes']);
 });
+
+test('public new window link runs as the anonymous reader without sign in or deals tab', async ({ page }) => {
+  await page.addInitScript(() => {
+    window.RECIPE_TRACKER_CONFIG = { USE_REMOTE_BACKEND: true, PUBLIC_READER: true, apiBaseUrl: '/api' };
+    localStorage.setItem('recipe_journal_session', JSON.stringify({
+      token: 'test-family-session',
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    }));
+    localStorage.setItem('recipe_journal_prefs', JSON.stringify({
+      filters: { search: 'Stale search fixture' },
+      recentSearches: ['Stale search fixture'],
+    }));
+  });
+  const requests = [];
+  await page.route('**/api/v1/**', (route) => {
+    requests.push(new URL(route.request().url()).pathname);
+    expect(route.request().headers().authorization).toBeUndefined();
+    return route.fulfill({ json: { data: [{
+      id: 'public-recipe',
+      name: 'Homemade Pita Bread',
+      ingredients: 'Flour and water',
+      instructions: 'Bake.',
+    }] } });
+  });
+  await page.route('**/build/public/recipes.json', (route) => route.fulfill({ json: [] }));
+  await page.goto('./index.html?embed=public');
+  await expect(page.getByRole('searchbox')).toHaveValue('');
+  await expect(page.locator('.card').filter({ hasText: 'Homemade Pita Bread' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Sign in to edit' })).toBeHidden();
+  await expect(page.getByRole('link', { name: 'Black Friday' })).toBeHidden();
+  await expect(page.getByRole('link', { name: 'Kitchen' })).toBeHidden();
+  await expect(page.locator('#libraryTab')).toHaveAttribute('href', './index.html?embed=public');
+  expect(requests).toEqual(['/api/v1/public-recipes']);
+});
