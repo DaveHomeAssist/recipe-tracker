@@ -1,4 +1,4 @@
-const CACHE_VERSION = '2026-11-27-1';
+const CACHE_VERSION = '2026-11-27-2';
 const CACHE_NAME = `recipe-journal-${CACHE_VERSION}`;
 const APP_SHELL = [
   './',
@@ -21,6 +21,7 @@ const APP_SHELL = [
   './assets/recipe-library/no-search-results.webp',
   './src/recipe-lib.js',
   './src/recipe-render.js',
+  './src/recipe-prefs.js',
   './src/thanksgiving.js',
   './src/recipe-schema.js',
   './src/seed-images.js',

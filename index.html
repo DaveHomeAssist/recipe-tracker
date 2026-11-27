@@ -412,6 +412,17 @@
   <small>Browse recipes by course →</small>
 </a>
 </div>
+<section class="continue-card" id="continueCard" aria-labelledby="continueTitle" hidden>
+  <div>
+    <span class="continue-eyebrow">Continue where you left off</span>
+    <strong id="continueTitle"></strong>
+    <small id="continueMeta"></small>
+  </div>
+  <div class="continue-actions">
+    <button class="btn-primary" id="continueOpenBtn" type="button">Open recipe</button>
+    <button class="btn-secondary" id="continueDismissBtn" type="button">Dismiss</button>
+  </div>
+</section>
 <div class="toolbar" role="toolbar" aria-label="Recipe toolbar">
   <div class="search-wrap">
     <label for="searchInput" class="visually-hidden">Search recipes</label>
@@ -581,7 +592,7 @@ import {
   splitTagLabels,
   tidyIngredientLine,
 } from './src/recipe-lib.js';
-import { filtered as filteredRecipes, renderGridHtml, statsFor, stars } from './src/recipe-render.js';
+import { filtered as filteredRecipes, renderGridHtml, searchText, statsFor, stars } from './src/recipe-render.js';
 import { renderThanksgivingMenu } from './src/thanksgiving.js';
 import { validateImport } from './src/recipe-schema.js';
 import { loadSeedImageLookup, mergeSeedImages } from './src/seed-images.js';
@@ -592,7 +603,7 @@ import { getStoredSessionToken } from './src/session-storage.js';
 import { clearStoredCredentials, migrateLegacyFamilyCode, submitAccessCode } from './src/auth.js';
 import { loadRemoteRecipeCache, saveRemoteRecipeCache } from './src/recipe-cache.js';
 import { bootstrapRemoteRecipes, deleteRemoteRecipe, replayQueuedRemoteWrites, saveRemoteRecipe, syncLocalCorpusToRemote } from './src/recipe-remote.js';
-import { loadPrefs, recordEdit, recordExport, recordFilter, recordRating, recordSearch, recordView, savePrefs } from './src/recipe-prefs.js';
+import { continueRecipe, dismissContinue, loadPrefs, recordEdit, recordExport, recordFilter, recordLibraryScroll, recordRating, recordSearch, recordView, savePrefs } from './src/recipe-prefs.js';
 
 // ══════════════════════════════════════════════
 // STATE
@@ -820,6 +831,8 @@ let compactGridScroll = 0;
 let pendingRecipeDelete = null;
 let deletingRecipe = false;
 let recentSearchTimer = null;
+let scrollPreferenceTimer = null;
+let restoredLibraryScroll = false;
 let searchFocused = false;
 let lastBackupNudgeCount = 0;
 let tagInputState = { selected: [], suggestions: [], activeIndex: -1, flashSlug: '' };
@@ -1197,13 +1210,27 @@ function renderFilterChips() {
 
 function renderRecentSearches() {
   const host = document.getElementById('recentSearches');
-  const query = filters.search.trim().toLowerCase();
-  const suggestions = prefs.recentSearches.filter((item) => !query || item.toLowerCase().includes(query));
-  const shouldShow = searchFocused && suggestions.length > 0;
-  host.innerHTML = suggestions
-    .map((query) => `<button type="button" class="suggestion-chip" data-search="${escapeHtml(query)}">${escapeHtml(query)}</button>`)
-    .join('');
+  const query = searchText(filters.search.trim());
+  const titleMatches = query.length >= 2
+    ? recipes.filter((recipe) => searchText(recipe.name).includes(query)).slice(0, 4)
+    : [];
+  const recent = prefs.recentSearches.filter((item) => !query || item.toLowerCase().includes(query)).slice(0, 3);
+  const shouldShow = searchFocused && (titleMatches.length > 0 || recent.length > 0);
+  host.innerHTML = [
+    ...titleMatches.map((recipe) => `<button type="button" class="suggestion-chip suggestion-recipe" data-recipe-suggestion="${escapeHtml(recipe.id)}"><span>${escapeHtml(recipe.name)}</span><small>${escapeHtml(recipe.cuisine || 'Recipe')}</small></button>`),
+    ...recent.map((value) => `<button type="button" class="suggestion-chip" data-search="${escapeHtml(value)}">${escapeHtml(value)}</button>`),
+  ].join('');
   host.classList.toggle('show', shouldShow);
+}
+
+function renderContinueCard() {
+  const host = document.getElementById('continueCard');
+  const recipe = continueRecipe(recipes, prefs);
+  host.hidden = !recipe || viewingId !== null || thanksgivingMode;
+  if (!recipe) return;
+  host.dataset.recipeId = String(recipe.id);
+  document.getElementById('continueTitle').textContent = recipe.name;
+  document.getElementById('continueMeta').textContent = recipe.cuisine || 'Recently viewed recipe';
 }
 
 function renderFormSuggestions() {
@@ -1545,14 +1572,29 @@ function render() {
   renderFilterChips();
   renderLibraryHeading();
   renderStats();
+  renderContinueCard();
   renderGrid();
   refreshInspector();
   renderRecentSearches();
   renderFormSuggestions();
   renderTagInput();
   renderTagManager();
+  if (!restoredLibraryScroll && recipes.length) {
+    restoredLibraryScroll = true;
+    requestAnimationFrame(() => { recipeScroller().scrollTop = Number(prefs.libraryScroll || 0); });
+  }
   if (!readerMode) maybeShowBackupNudge();
 }
+
+function scheduleScrollPreference(event) {
+  if (event.target !== recipeScroller()) return;
+  clearTimeout(scrollPreferenceTimer);
+  scrollPreferenceTimer = setTimeout(() => {
+    prefs = recordLibraryScroll(recipeScroller().scrollTop, prefs);
+  }, 160);
+}
+libraryBrowser.addEventListener('scroll', scheduleScrollPreference, { passive: true });
+recipeGrid.addEventListener('scroll', scheduleScrollPreference, { passive: true });
 
 async function migrateSeedImagesIfNeeded() {
   if (getStoredSchemaVersion() >= SCHEMA_VERSION) return;
@@ -1850,6 +1892,11 @@ searchInput.addEventListener('blur', () => {
   }, 120);
 });
 document.getElementById('recentSearches').addEventListener('click', (event) => {
+  const recipeSuggestion = event.target.closest('[data-recipe-suggestion]');
+  if (recipeSuggestion) {
+    openView(recipeSuggestion.dataset.recipeSuggestion, { focusHeading: true });
+    return;
+  }
   const chip = event.target.closest('[data-search]');
   if (!chip) return;
   const query = chip.dataset.search || '';
@@ -1859,6 +1906,15 @@ document.getElementById('recentSearches').addEventListener('click', (event) => {
   renderStats();
   renderGrid();
   renderRecentSearches();
+});
+document.getElementById('continueOpenBtn').addEventListener('click', () => {
+  const id = document.getElementById('continueCard').dataset.recipeId;
+  if (id) openView(id, { focusHeading: true });
+});
+document.getElementById('continueDismissBtn').addEventListener('click', () => {
+  prefs = dismissContinue(prefs);
+  renderContinueCard();
+  showToast('Continue suggestion dismissed.', 'info');
 });
 
 // ──────────────────────────────────────────────
@@ -2398,6 +2454,7 @@ function openView(id, { focusHeading = false, fromHistory = false } = {}) {
     renderInspector(recipe);
   }
   inspector.hidden = false;
+  renderContinueCard();
   if (compactInspector.matches) {
     if (wasClosed) compactGridScroll = scroll;
     libraryBrowser.inert = true;
@@ -2418,6 +2475,7 @@ function closeInspector({ restoreFocus = true, fromHistory = false } = {}) {
   viewingId = null;
   inspectorIdentity = null;
   inspector.hidden = true;
+  renderContinueCard();
   inspectorBody.replaceChildren();
   document.getElementById('v-name').textContent = '';
   document.getElementById('v-sub').replaceChildren();

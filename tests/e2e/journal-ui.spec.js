@@ -34,7 +34,7 @@ async function expectReadableRecipeDetail(dialog) {
   }
 }
 
-for (const viewport of [{ width: 375, height: 812 }, { width: 1440, height: 900 }]) {
+for (const viewport of [{ width: 375, height: 812 }, { width: 820, height: 1180 }, { width: 1440, height: 900 }]) {
   test(`Journal and Kitchen work within a ${viewport.width}px viewport`, async ({ page }) => {
     await page.setViewportSize(viewport);
     await page.addInitScript(({ key, item }) => {
@@ -56,10 +56,17 @@ for (const viewport of [{ width: 375, height: 812 }, { width: 1440, height: 900 
     const banner = page.locator('.library-heading');
     await expect(banner).toHaveCSS('background-image', /banner-light\.webp/);
     await expect(page.getByRole('link', { name: /Thanksgiving menu/ })).toBeVisible();
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await expect(card).toHaveCSS('transition-duration', /1e-05s|0\.00001s|0s/);
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
     const inspector = page.locator('#recipeInspector');
     await card.click();
     await expectReadableRecipeDetail(inspector);
     await page.getByRole('button', { name: /Close recipe|Back to recipes/ }).click();
+    await expect(page.locator('#continueCard')).toBeVisible();
+    await expect(page.locator('#continueCard')).toContainText(recipe.name);
+    await page.getByRole('button', { name: 'Dismiss' }).click();
+    await expect(page.locator('#continueCard')).toBeHidden();
 
     await page.getByRole('button', { name: 'Dark mode' }).click();
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
@@ -71,6 +78,8 @@ for (const viewport of [{ width: 375, height: 812 }, { width: 1440, height: 900 
     await expect.poll(() => illustration.evaluate((image) => image.naturalWidth)).toBeGreaterThan(0);
     expect(await fit()).toBe(true);
     await search.fill('gougeres');
+    await search.focus();
+    await expect(page.locator('[data-recipe-suggestion="gougeres-test"]')).toBeVisible();
     await expect(illustration).toHaveCount(0);
     await expect(card).toBeVisible();
     await card.click();

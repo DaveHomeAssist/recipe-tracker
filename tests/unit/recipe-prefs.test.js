@@ -1,10 +1,13 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import {
+  continueRecipe,
+  dismissContinue,
   loadPrefs,
   recordEdit,
   recordExport,
   recordFilter,
+  recordLibraryScroll,
   recordRating,
   recordSearch,
   recordView,
@@ -55,8 +58,19 @@ describe('recipe prefs', () => {
     expect(prefs.lastFilter).toBe('Italian');
     expect(prefs.editsSinceLastExport).toBe(2);
     expect(prefs.recentlyViewed).toEqual(['recipe-1', 'recipe-2']);
+    expect(prefs.lastView.id).toBe('recipe-1');
     prefs = recordExport(prefs);
     expect(prefs.editsSinceLastExport).toBe(0);
+  });
+
+  it('keeps continue and scroll state local, bounded, and dismissible', () => {
+    const now = Date.UTC(2026, 10, 27, 15, 0, 0);
+    let prefs = recordView('recipe-1', loadPrefs(), now);
+    prefs = recordLibraryScroll(412.6, prefs);
+    expect(prefs.libraryScroll).toBe(413);
+    expect(continueRecipe([{ id: 'recipe-1', name: 'Gougères' }], prefs, now + 1000)?.name).toBe('Gougères');
+    prefs = dismissContinue(prefs, now + 2000);
+    expect(continueRecipe([{ id: 'recipe-1', name: 'Gougères' }], prefs, now + 3000)).toBeNull();
   });
 
   it('tracks rating history and stores the median as the default', () => {
