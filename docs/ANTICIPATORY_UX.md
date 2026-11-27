@@ -27,7 +27,8 @@ Help a reader continue a recent recipe or search with explicit, dismissible sugg
 
 - A reopened library can continue a recent recipe, dismiss the suggestion and restore a saved scroll position.
 - Search suggestions come only from local recipe titles and recent successful searches.
-- Public embedded and standalone readers can use safe local preferences without gaining edit credentials.
+- Family readers can use safe local preferences without storing or gaining edit credentials.
+- Public embedded and anonymous reader modes ignore existing family preferences and credentials.
 - Phone, iPad and desktop layouts have no horizontal overflow and retain 44 px controls.
 - All new motion is 180 ms or less and becomes effectively immediate under reduced motion.
 - Recipe-only printing, inspector Back behavior and the anonymous edit boundary remain unchanged.

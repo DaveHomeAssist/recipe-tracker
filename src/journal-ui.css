@@ -480,6 +480,7 @@ body.library-page, body.kitchen-page {
 }
 @media (max-height: 530px) and (orientation: landscape) {
   .library-heading { padding-block: 4px; }
+  .continue-card { display: none; }
   .library-opening {
     grid-template-columns: minmax(0, 1fr) auto;
   }

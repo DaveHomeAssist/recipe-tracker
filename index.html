@@ -1210,6 +1210,11 @@ function renderFilterChips() {
 
 function renderRecentSearches() {
   const host = document.getElementById('recentSearches');
+  if (thanksgivingMode) {
+    host.replaceChildren();
+    host.classList.remove('show');
+    return;
+  }
   const query = searchText(filters.search.trim());
   const titleMatches = query.length >= 2
     ? recipes.filter((recipe) => searchText(recipe.name).includes(query)).slice(0, 4)
@@ -1227,7 +1232,12 @@ function renderContinueCard() {
   const host = document.getElementById('continueCard');
   const recipe = continueRecipe(recipes, prefs);
   host.hidden = !recipe || viewingId !== null || thanksgivingMode;
-  if (!recipe) return;
+  if (!recipe || thanksgivingMode) {
+    host.removeAttribute('data-recipe-id');
+    document.getElementById('continueTitle').textContent = '';
+    document.getElementById('continueMeta').textContent = '';
+    return;
+  }
   host.dataset.recipeId = String(recipe.id);
   document.getElementById('continueTitle').textContent = recipe.name;
   document.getElementById('continueMeta').textContent = recipe.cuisine || 'Recently viewed recipe';
@@ -2484,6 +2494,7 @@ function closeInspector({ restoreFocus = true, fromHistory = false } = {}) {
   libraryBrowser.inert = false;
   updateSelectedCard();
   recipeScroller().scrollTop = scroll;
+  if (compactInspector.matches) card?.scrollIntoView({ block: 'nearest' });
   if (restoreFocus) {
     const cardBox = card?.getBoundingClientRect();
     const gridBox = recipeScroller().getBoundingClientRect();
